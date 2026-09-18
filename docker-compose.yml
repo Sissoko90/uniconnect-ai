@@ -1,0 +1,47 @@
+services:
+  db:
+    # pgvector ships on top of the official postgres 16 image, so the
+    # extension is already compiled in. Plain postgres:16 cannot create it.
+    image: pgvector/pgvector:pg16
+    container_name: uniconnect-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-uniconnect}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-uniconnect}
+    ports:
+      # Bound to loopback on purpose. Without the 127.0.0.1 prefix docker
+      # punches a hole straight through ufw and the database faces the
+      # internet. Reach it from your laptop with an ssh tunnel.
+      # DB_PORT only moves the host side, for laptops that already run a
+      # Postgres on 5432. Inside the network it is always 5432.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs ONCE, on a fresh volume only. After that the schema is not
+      # re-applied - see docs/SETUP.md for how to reset.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-uniconnect} -d ${POSTGRES_DB:-uniconnect}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build: ./core
+    container_name: uniconnect-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Overrides the .env value: inside the compose network the database
+      # answers to "db", not localhost.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uniconnect}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-uniconnect}
+    ports:
+      # nginx terminates TLS and proxies to this. Nothing else reaches it.
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
