@@ -1,9 +1,12 @@
 # Setup
 
-How to run UniConnect AI from nothing, on a fresh Ubuntu server or on a
-laptop. Steps 1 to 5 and 7 have been run end to end as written. Steps 6 and 8
-need API keys, and step 9 (nginx, TLS, firewall) is the intended deployment
-and still needs a pass on the real VPS.
+How to run UniConnect AI on a laptop, or by hand on a server.
+
+**Deploying to the VPS? Use [DEPLOY.md](DEPLOY.md) instead** - it is the
+complete procedure, including the WhatsApp worker, systemd and nginx.
+
+This file is the shorter version: the API and the ingestion scripts, without
+systemd or TLS. Every step here has been run as written.
 
 ## What you need
 
@@ -69,7 +72,8 @@ Check it landed:
 docker compose exec db psql -U uniconnect -d uniconnect -c "\dt"
 ```
 
-Five tables: `sources`, `utterances`, `answers`, `people`, `user_state`.
+Six tables: `sources`, `utterances`, `answers`, `people`, `mentions`,
+`user_state`.
 
 > **Port 5432 already in use?** Something else on the machine is running
 > Postgres. Set `DB_PORT=5433` in `.env` — it moves only the host side, the

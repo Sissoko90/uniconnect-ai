@@ -10,7 +10,7 @@ days of starting.
 ```mermaid
 flowchart LR
     WA[WhatsApp group] -->|Baileys| W[Worker<br/>Node]
-    WEB[Web page<br/>Next.js] --> API
+    WEB[Web page] --> API
     W -->|POST /ask| API[API<br/>FastAPI]
     API --> DB[(Postgres 16<br/>+ pgvector)]
     API -->|embed question| V[Voyage]
@@ -84,6 +84,7 @@ every answer is correct.
 | `utterances` | one message or one transcript block | carries `embedding vector(1024)` and a generated `fts` column |
 | `answers` | every answer produced | powers duplicate detection and the metrics |
 | `people` | a handle and the name behind it | resolves `+229 90 00 00 42` to a person |
+| `mentions` | somebody named in a message | pending until the worker confirms it told them |
 | `user_state` | a member's `last_seen_at` | the clock the catch-up feature reads |
 
 Three details that are easy to get wrong and expensive to fix later:
@@ -121,6 +122,12 @@ caps a group at 8 participants, which makes it unusable for a group of 153.
 Baileys connects as a linked device instead. The price is that the number can
 be blocked by Meta if it behaves like a spammer — another reason the silence
 rule is not negotiable.
+
+**The web page is served by the API, not hosted separately.** One file, no
+build step, no second deployment to keep in sync, and it calls the API on its
+own origin. Vercel was the original plan; it would have added an account, a
+build and a CORS configuration to the critical path for a page that is one
+input box.
 
 **Postgres for vectors instead of a vector database.** One database to
 operate, one backup to take, and full text search in the same query as the

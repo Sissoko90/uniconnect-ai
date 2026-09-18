@@ -1,15 +1,18 @@
 {
-  "name": "whatsapp",
+  "name": "uniconnect-whatsapp",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "description": "WhatsApp worker for UniConnect AI: reads the group, answers when asked",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "scripts": {
+    "start": "node --env-file=.env index.js",
+    "groups": "node --env-file=.env groups.js",
+    "check": "node --check index.js && node --check api.js && node --check groups.js"
+  },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "qrcode-terminal": "^0.12.0"
