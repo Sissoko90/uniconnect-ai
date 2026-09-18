@@ -25,17 +25,32 @@ group has a noise problem and we must not add to it.
 ## Answering a question
 
 ```js
+const inGroup = msg.key.remoteJid.endsWith("@g.us");
+
 const r = await fetch("http://127.0.0.1:8000/ask", {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
     question: text,                    // what they typed, minus the @ask
-    user: msg.key.participant,         // the JID, e.g. "2239…@s.whatsapp.net"
-    group_id: msg.key.remoteJid,       // stable id for the group
+    user: inGroup ? msg.key.participant : msg.key.remoteJid,
+    group_id: METI_GROUP_JID,          // ALWAYS the group. See below.
+    private: !inGroup,
   }),
 });
 const { answer, sources, meta } = await r.json();
 ```
+
+> **`group_id` is always the group's JID, never the chat the message arrived
+> in.** It says *which history to search*, not where to reply. In a direct
+> message `msg.key.remoteJid` is the person, so sending that would search a
+> history with nothing in it and the bot would answer "I could not find
+> anything" to every private question — the half of the product that is
+> supposed to be the most useful. Put the group's JID in a constant and send
+> it every time.
+>
+> `private: true` on a direct message keeps that question out of the duplicate
+> detection that speaks in front of the group. Without it, the bot could
+> announce to everyone that somebody asked something in private.
 
 `sources` is an array of `{author, said_at, excerpt, permalink}`. Show at
 least the first one — a citation is what separates this from a chatbot that
@@ -64,6 +79,8 @@ Trigger on a private message like "what did I miss", "quoi de neuf",
 POST /catchup  { user, group_id, question? }
 → { summary, since, message_count, truncated, first_time }
 ```
+
+Same rule as above: `group_id` is the group's JID, `user` is the person's.
 
 Send `summary` as-is. It is written for a phone. `first_time: true` means we
 had no bookmark for this person and summarised the last 48 hours — worth
@@ -98,6 +115,35 @@ POST /feedback { user, group_id, helpful: true | false }
 
 It rates the last answer that person received. This feeds the numbers we show
 the judges, so it is worth wiring even though nothing depends on it.
+
+## What the worker must refuse to do
+
+Three rules the API cannot enforce for you, because they are about messages
+it never sees.
+
+**Never answer the bot's own messages, and never answer another bot.** Two
+bots in one group will happily talk to each other all night. The API charges
+nothing for an exact repeat within 30 seconds, but a loop that varies its
+wording is not free. Drop anything where `msg.key.fromMe` is true, and ignore
+any sender you have identified as a bot.
+
+**Wait two or three seconds before sending.** A number that replies in 200
+milliseconds, every time, at four in the morning, is a number Meta blocks —
+and a blocked number ends the project in one move. The delay costs nothing
+and makes the bot look like a participant rather than a scraper.
+
+**Never send a message nobody asked for.** No welcome messages, no direct
+messages to people who have not written to the bot first. That is the fastest
+route to a ban, and the fastest route to the group resenting it.
+
+## The flags on `meta`
+
+| Flag | What it means | What to do |
+|---|---|---|
+| `duplicate` | already answered; `answered_at` and `original_question` say when and what | in the group, post once per topic and then stay quiet |
+| `repeat` | the same person asked the same words seconds ago | say nothing, it was a double tap or a retry |
+| `rate_limited` | this person has hit the hourly limit | send `answer` as-is, it is already a polite message in their language |
+| `degraded` | the daily spend cap was reached; the answer came from search alone | send it normally — it is still sourced, just blunter |
 
 ## Failures
 
