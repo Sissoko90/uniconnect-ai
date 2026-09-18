@@ -45,6 +45,12 @@ order by questions desc
 limit 10
 """
 
+# This page is public - it is meant to be, the judges open it. But asked_by is
+# a WhatsApp JID in production, which is a member's phone number, and "who
+# uses the bot most" is not a fact any of them agreed to publish. The count is
+# the interesting part; the identity is not.
+SHOW_IDENTITIES = False
+
 
 def summary(pool) -> dict:
     with pool.connection() as conn:
@@ -57,6 +63,14 @@ def summary(pool) -> dict:
 
             cur.execute(TOP_ASKERS_SQL)
             askers = cur.fetchall()
+
+    if not SHOW_IDENTITIES:
+        # Rank without naming: "our busiest member asked 23 questions" is the
+        # figure worth showing, and it says nothing about who they are.
+        askers = [
+            {"rank": i, "questions": row["questions"]}
+            for i, row in enumerate(askers, start=1)
+        ]
 
     answered = totals["questions_answered"] or 0
     sourced = totals["answers_with_sources"] or 0

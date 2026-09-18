@@ -28,6 +28,7 @@ from contextlib import asynccontextmanager
 
 import alerts
 import answer as answer_engine
+import auth
 import catchup as catchup_engine
 import ingest
 import limits
@@ -35,7 +36,7 @@ import metrics as metrics_engine
 import recap
 import timeline as timeline_engine
 import voice
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
@@ -149,7 +150,7 @@ class CatchupRequest(BaseModel):
     question: str | None = None
 
 
-@app.post("/catchup")
+@app.post("/catchup", dependencies=[Depends(auth.require_worker)])
 def catch_up(req: CatchupRequest) -> dict:
     return catchup_engine.catch_up(
         pool, user=req.user, group_id=req.group_id, question=req.question
@@ -179,7 +180,7 @@ class MessagesRequest(BaseModel):
     messages: list[IncomingMessage] = Field(max_length=500)
 
 
-@app.post("/messages")
+@app.post("/messages", dependencies=[Depends(auth.require_worker)])
 def ingest_messages(req: MessagesRequest, background: BackgroundTasks) -> dict:
     """Every message the worker sees, mentioned or not.
 
@@ -225,7 +226,7 @@ class VoiceNote(BaseModel):
     permalink: str | None = None
 
 
-@app.post("/voice")
+@app.post("/voice", dependencies=[Depends(auth.require_worker)])
 def ingest_voice(note: VoiceNote, background: BackgroundTasks) -> dict:
     """A voice note, transcribed and stored as an ordinary message.
 
@@ -234,6 +235,7 @@ def ingest_voice(note: VoiceNote, background: BackgroundTasks) -> dict:
     cited like any other message - and unlike a call transcript it is
     attributed to the person who recorded it, because we know who that is.
     """
+    limits.assert_budget(pool)
     result = voice.store_voice_note(
         pool,
         group_id=note.group_id,
@@ -256,7 +258,7 @@ def ingest_voice(note: VoiceNote, background: BackgroundTasks) -> dict:
 # --------------------------------------------------------------------------
 
 
-@app.get("/alerts/{group_id}")
+@app.get("/alerts/{group_id}", dependencies=[Depends(auth.require_worker)])
 def pending_alerts(group_id: str, limit: int = 50) -> dict:
     """Who has been named in the group and has not come back to it.
 
@@ -273,7 +275,7 @@ class AlertsSent(BaseModel):
     ids: list[str]
 
 
-@app.post("/alerts/sent")
+@app.post("/alerts/sent", dependencies=[Depends(auth.require_worker)])
 def alerts_sent(req: AlertsSent) -> dict:
     """Confirm delivery, so nobody is told the same thing twice."""
     return {"marked": alerts.mark_sent(pool, req.ids)}
@@ -294,7 +296,7 @@ class PeopleRequest(BaseModel):
     people: list[Person]
 
 
-@app.post("/people")
+@app.post("/people", dependencies=[Depends(auth.require_worker)])
 def upsert_people(req: PeopleRequest) -> dict:
     """Called by the Baileys worker with the pushNames WhatsApp gives it.
 
@@ -331,7 +333,7 @@ class FeedbackRequest(BaseModel):
     helpful: bool
 
 
-@app.post("/feedback")
+@app.post("/feedback", dependencies=[Depends(auth.require_worker)])
 def feedback(req: FeedbackRequest) -> dict:
     """Rate the last answer this person got.
 
@@ -365,35 +367,38 @@ def feedback(req: FeedbackRequest) -> dict:
 # bot may speak in the group lives in one place, and it is not this one.
 
 
-@app.get("/recap/{source_id}")
+@app.get("/recap/{source_id}", dependencies=[Depends(auth.require_worker)])
 def call_recap(source_id: str) -> dict:
     """Decisions, action items and open questions from one transcribed call."""
+    limits.assert_budget(pool)
     result = recap.call_recap(pool, source_id)
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
     return result
 
 
-@app.get("/recap/latest/{group_id}")
+@app.get("/recap/latest/{group_id}", dependencies=[Depends(auth.require_worker)])
 def latest_call_recap(group_id: str) -> dict:
     """The most recent call, for a worker that does not track call ids."""
+    limits.assert_budget(pool)
     source_id = recap.latest_call(pool, group_id)
     if source_id is None:
         raise HTTPException(status_code=404, detail="no transcribed call for this group")
     return recap.call_recap(pool, source_id)
 
 
-@app.get("/digest/{group_id}")
+@app.get("/digest/{group_id}", dependencies=[Depends(auth.require_worker)])
 def daily_digest(group_id: str, day: str | None = None, lang: str | None = None) -> dict:
     """Five lines on the last 24 hours, or on `day` (YYYY-MM-DD, UTC).
 
     `quiet` true means nothing happened worth posting. That is a result, not
     an error: the worker should post nothing rather than announce silence.
     """
+    limits.assert_budget(pool)
     return recap.daily_digest(pool, group_id, day, lang)
 
 
-@app.get("/timeline/{group_id}")
+@app.get("/timeline/{group_id}", dependencies=[Depends(auth.require_worker)])
 def group_timeline(group_id: str) -> dict:
     """The schedule, as monospace text the worker can send in the thread.
 
@@ -403,6 +408,7 @@ def group_timeline(group_id: str) -> dict:
 
     `empty` true means the group has not fixed any dates worth showing.
     """
+    limits.assert_budget(pool)
     result = timeline_engine.build(pool, group_id)
     if "error" in result:
         raise HTTPException(status_code=503, detail=result["error"])
@@ -462,4 +468,7 @@ def health():
         "spend_today_usd": round(limits.spend_today_usd(pool), 4),
         "spend_cap_usd": limits.DAILY_SPEND_CAP_USD,
         "capped": limits.over_spend_cap(pool),
+        # So a deploy that forgot the token says so instead of quietly
+        # refusing every call the worker makes.
+        "worker_auth": auth.configured(),
     }

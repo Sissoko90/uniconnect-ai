@@ -8,6 +8,26 @@ Everything below is live today. You can build against it before the keys are
 in place: without them the API still answers, from full text search instead of
 Claude, with the same response shape.
 
+## Every call needs the token
+
+Most of this API is not public — it reads and writes a private group's
+messages. Send the shared secret on **every** request except `/ask`:
+
+```js
+const API = "http://127.0.0.1:8000";
+const HEADERS = {
+  "content-type": "application/json",
+  "x-uniconnect-token": process.env.WORKER_TOKEN,
+};
+```
+
+Use the same value as `WORKER_TOKEN` in the API's `.env`. Without it those
+endpoints answer `401`; if the API itself has no token configured they answer
+`503` and say so. `GET /health` reports `worker_auth` so you can check at
+startup rather than discovering it on the first message.
+
+Add `WORKER_TOKEN` to the worker's own `.env`, and never commit it.
+
 ## The rule that shapes all of it
 
 **Silent in the group, talkative in private.**

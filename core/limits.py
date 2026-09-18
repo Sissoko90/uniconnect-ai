@@ -97,3 +97,27 @@ def over_spend_cap(pool) -> bool:
     if DAILY_SPEND_CAP_USD <= 0:
         return False  # 0 or less disables the cap entirely
     return spend_today_usd(pool) >= DAILY_SPEND_CAP_USD
+
+
+def assert_budget(pool) -> None:
+    """Refuse an endpoint that has no cheaper mode to fall back to.
+
+    /ask degrades: past the cap it answers from search alone. A digest, a
+    recap or a timeline has no such half-measure - there is no useful version
+    of them without a model - so they stop until midnight instead.
+
+    Applying this everywhere matters more than it looks. The cap was written
+    for /ask and every endpoint added afterwards could call a paid model with
+    no limit at all, which meant the guardrail could simply be walked around
+    by asking for a digest in a loop.
+    """
+    from fastapi import HTTPException
+
+    if over_spend_cap(pool):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Daily spend cap of ${DAILY_SPEND_CAP_USD} reached. "
+                "Questions are still answered from search; this resumes at midnight UTC."
+            ),
+        )

@@ -74,6 +74,27 @@ Before going public, check that the secrets job has passed on the **full
 history**, not just the latest commit. A key removed in a later commit is
 still a published key: revoke it, do not delete it.
 
+## Caught by review, not by us
+
+A security review of pushed commits found three real problems, all in
+endpoints added after the guardrails were written:
+
+- **`/alerts` would have been public.** It says who was named in a private
+  group and quotes what was said to them, and our own nginx configuration
+  proxied `location /` to the whole API. Now behind the worker token, and the
+  documented nginx configuration exposes only the four public paths.
+- **The spend cap only covered `/ask`.** Every endpoint added afterwards
+  called a paid model with no limit, so the cap could be walked around by
+  asking for a digest in a loop. `limits.assert_budget` now runs on all of
+  them.
+- **`/alerts/sent` accepted any ids from anyone**, which let a caller mark
+  alerts delivered without delivering them — silently suppressing the
+  notifications. Now behind the worker token.
+
+The lesson we are keeping: a guardrail written for one endpoint is not a
+guardrail. `tests/test_auth.py` exists so the next endpoint has to choose a
+side of the line deliberately.
+
 ## Known gaps
 
 Stated plainly rather than left for someone to discover:
@@ -81,9 +102,11 @@ Stated plainly rather than left for someone to discover:
 - **The loop guard is only half in our hands.** The API answers an identical
   repeat for free, but a loop between two bots that varies its wording is
   stopped by the worker refusing to answer bots — not by us.
-- **No authentication between the worker and the API.** They share a host and
-  talk over loopback. Exposing the API publicly would require adding auth
-  first.
+- **The public surface is four paths.** `/`, `/ask`, `/metrics/page` and
+  `/health`. Everything else — the group's messages, voice notes, mention
+  alerts, catch-up, digests, recaps — requires a shared `WORKER_TOKEN` and is
+  refused without it. An unset token disables those endpoints rather than
+  opening them.
 - **No database backups.** If the VPS is lost, the history and the usage
   metrics go with it.
 - **No audit log.** We record every answer, but not who read what.

@@ -207,20 +207,35 @@ sudo ufw allow 22,80,443/tcp
 sudo ufw enable
 ```
 
-nginx in front of the API:
+nginx in front of the API. **Expose the public paths only** — the rest of the
+API reads and writes a private group's messages, and the worker reaches it on
+loopback without going through nginx at all:
 
 ```nginx
 server {
     server_name uniconnect.example.com;
 
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_read_timeout 120s;   # answers can take a while to generate
-    }
+    # The web fallback page, the question endpoint behind it, the usage page
+    # for the judges, and liveness. Nothing else.
+    location = /            { include proxy_params; proxy_pass http://127.0.0.1:8000; }
+    location = /ask         { include proxy_params; proxy_pass http://127.0.0.1:8000; }
+    location = /metrics/page { include proxy_params; proxy_pass http://127.0.0.1:8000; }
+    location = /health      { include proxy_params; proxy_pass http://127.0.0.1:8000; }
+
+    # Everything else - /messages, /voice, /alerts, /catchup, /digest,
+    # /recap, /timeline, /people, /feedback - stays on loopback.
+    location / { return 404; }
 }
 ```
+
+`/etc/nginx/proxy_params` ships with nginx and sets the forwarding headers.
+Add `proxy_read_timeout 120s;` to the `/ask` block — generating an answer can
+take a while.
+
+An earlier version of this file proxied `location /` to the whole API. That
+would have put `/alerts` — who was named in the group, and what was said to
+them — on the open internet. Those endpoints now also require the worker
+token, so this is the second lock rather than the only one.
 
 ```bash
 sudo certbot --nginx -d uniconnect.example.com
