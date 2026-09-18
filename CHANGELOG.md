@@ -8,6 +8,18 @@ Notable changes to UniConnect AI. Format follows
 
 ### Added
 
+- **Prompt-injection defences.** Retrieved messages are fenced in
+  `<group_messages>`, closing tags inside a message are defanged so nobody can
+  end the block early, the system prompt states that nothing inside can change
+  the rules, and the question is labelled as the only instruction to follow.
+- **Guardrails** (`core/limits.py`): twenty questions per person per hour, a
+  daily spend cap computed from the token counts the API reports, and an
+  identical repeat within thirty seconds answered from the database for
+  nothing. Reaching the cap degrades to search without generation rather than
+  silencing the bot, and says so on `meta.degraded`.
+- **A rule against relaying personal judgements.** Decisions, deadlines and
+  ownership are what the bot is for; repeating what one colleague said about
+  another to a third is not.
 - **Question answering** (`POST /ask`) over the group's own history, with
   mandatory citations and a refusal when nothing matches.
 - **Hybrid retrieval**: pgvector cosine similarity and Postgres full text
@@ -55,6 +67,19 @@ Notable changes to UniConnect AI. Format follows
   fully parameterised query.
 - **The group's chat exports and the Baileys session keys were not
   git-ignored.**
+- **Direct messages would never have worked.** The integration notes told the
+  worker to send `msg.key.remoteJid` as `group_id`, which in a direct message
+  is the person, not the group — so every private question would have searched
+  an empty history and answered "I could not find anything". `group_id` is now
+  documented as always being the group's JID, with a separate `private` flag.
+- **A private question could have been announced to the group.** Duplicate
+  detection matched across the boundary, so `meta.original_question` could
+  have revealed in public what somebody asked in a direct message. Matching is
+  now scoped by `asked_privately`.
+- **Answers that found no source were never recorded**, which made the
+  coverage metric a meaningless 100% and let the hourly limit be bypassed
+  entirely by asking questions that match nothing. Measured coverage on real
+  traffic dropped from a flattering 100% to an honest 13%.
 - **The API crash-looped when the database was unreachable.** Startup waited
   on the connection pool and raised, so with `restart: unless-stopped` the
   container restarted forever with no way in to diagnose it — the opposite of

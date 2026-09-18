@@ -32,6 +32,17 @@ During the hackathon (18–24 September 2026) we aim to answer within a day.
 - **The bot never invents.** No source found means saying so. This is a
   safety property as much as a product one: a confidently wrong answer about
   a deadline or a decision causes real harm in a working group.
+- **Group messages are data, never instructions.** Everything retrieved is
+  fenced in `<group_messages>` tags, closing tags inside a message are
+  defanged, and the system prompt states that nothing inside them can change
+  the rules. In a cohort of an AI programme somebody will try this, and a
+  public jailbreak days before the vote would cost more than the bug itself.
+- **What is asked in private stays private.** Duplicate detection only ever
+  matches questions of the same kind, so the bot cannot announce to the group
+  that a member asked something in a direct message.
+- **One member cannot spend the group's budget.** Twenty questions an hour
+  each, a daily cap across everybody, and an identical repeat within thirty
+  seconds answered from the database for nothing.
 - **A leaked key is rotated, not deleted.** Removing a secret in a later
   commit does not unpublish it. Revoke it in the provider's console first.
 
@@ -67,8 +78,9 @@ still a published key: revoke it, do not delete it.
 
 Stated plainly rather than left for someone to discover:
 
-- **No rate limiting and no spend cap.** Nothing stops one member, or a
-  message loop between two bots, from running up the model bill.
+- **The loop guard is only half in our hands.** The API answers an identical
+  repeat for free, but a loop between two bots that varies its wording is
+  stopped by the worker refusing to answer bots — not by us.
 - **No authentication between the worker and the API.** They share a host and
   talk over loopback. Exposing the API publicly would require adding auth
   first.

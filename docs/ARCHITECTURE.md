@@ -133,11 +133,43 @@ Only nginx faces the internet, and only ports 22, 80 and 443 are open. The
 Docker writes its own iptables rules and the database faces the internet
 regardless of what ufw has been told.
 
+## Guardrails
+
+Four of them, and the reasoning is the same each time: 153 people, no limit
+in WhatsApp, and a bot that costs about one and a half cents per question.
+
+**Retrieved messages are untrusted input.** They are fenced in
+`<group_messages>`, any closing tag inside a message is defanged so nobody
+can end the block early, and the system prompt says plainly that nothing
+inside can change the rules. The question is placed after the block and
+labelled as the only instruction to follow. This is not hypothetical here:
+the group is a cohort of an AI programme, and a public jailbreak days before
+the vote would cost more than the bug.
+
+**Private questions are scoped.** `answers.asked_privately` splits duplicate
+detection in two, so a question asked in a direct message can never come back
+as "this was already answered" in front of the group.
+
+**Limits are measured in the database, not in memory.** Twenty questions per
+person per hour, a daily spend cap across everybody computed from the token
+counts the API actually reported, and an identical repeat from the same
+person within thirty seconds answered straight from the table — which is what
+makes a loop between two bots free rather than expensive.
+
+Reaching the cap does not silence the bot. It drops to search without
+generation and says so on `meta.degraded`. On the day the group votes, a
+blunter answer is worth more than no answer.
+
+**Answers that found nothing are recorded too.** Otherwise the coverage
+figure is a flattering 100% — and the hourly limit could be walked straight
+past by asking things that match nothing.
+
 ## What is deliberately not here
 
 - No authentication between the worker and the API. They are on the same
   host, on loopback. Exposing the API publicly would require adding it.
-- No rate limiting or spend cap. Known gap, tracked in the risk register.
 - No migrations. `db/schema.sql` is applied once on a fresh volume; changing
   it today means recreating the database. That is acceptable while the data
   is disposable and stops being acceptable the moment it is not.
+- No defence against a member who is simply wrong. The bot faithfully reports
+  what the group said, including when the group said something incorrect.
