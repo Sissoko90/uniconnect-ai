@@ -52,9 +52,16 @@ on Monday morning.
 pinned FastAPI pulled in a Starlette with eight known vulnerabilities, which
 is now fixed.
 
-**CodeQL needs a public repository**, or GitHub Advanced Security on a
-private one. If that job is the only failing one, that is why — and the
-submission rules ask for an accessible repository anyway.
+**CodeQL only runs while the repository is public.** On a private repository
+it can analyse the code but not upload its findings without GitHub Advanced
+Security, so the job is skipped rather than left permanently red — a security
+workflow everyone has learned to ignore protects nothing. Making the
+repository public turns it on, and the submission rules ask for an accessible
+repository anyway.
+
+Before going public, check that the secrets job has passed on the **full
+history**, not just the latest commit. A key removed in a later commit is
+still a published key: revoke it, do not delete it.
 
 ## Known gaps
 

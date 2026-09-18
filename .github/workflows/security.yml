@@ -68,8 +68,13 @@ jobs:
   codeql:
     name: CodeQL
     runs-on: ubuntu-latest
-    # Needs a public repository, or GitHub Advanced Security on a private one.
-    # If this job is the only red one, that is why - see SECURITY.md.
+    # CodeQL analyses a private repository fine but cannot upload its results
+    # without GitHub Advanced Security, which fails the job with "Resource not
+    # accessible by integration". Rather than leave the whole Security
+    # workflow permanently red - and teach everyone to ignore it - the job is
+    # skipped while the repository is private and runs the moment it is made
+    # public, which the submission rules require anyway.
+    if: github.event.repository.visibility == 'public'
     permissions:
       contents: read
       security-events: write
