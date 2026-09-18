@@ -1,0 +1,27 @@
+[project]
+name = "uniconnect-ai"
+version = "0.1.0"
+description = "An AI assistant that answers a busy group from its own chats and calls"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+# The two packages are deployed as separate containers and have no shared
+# parent, so tests import them by adding both to the path rather than
+# pretending there is an installable package.
+pythonpath = ["core", "ingestion"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Deliberately modest: correctness and import hygiene, not style opinions.
+# A hackathon repo where the linter argues about taste gets the linter turned
+# off, and then nothing is checked at all.
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert on private helpers on purpose.
+"tests/*" = ["E501"]
