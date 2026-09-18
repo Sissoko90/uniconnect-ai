@@ -1,0 +1,10 @@
+# Pinned exactly, so the container that passes CI is the container that runs
+# on the VPS. Bumped by dependabot, checked by pip-audit in the Security
+# workflow - the previous fastapi pin dragged in a starlette with eight known
+# vulnerabilities.
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+psycopg[binary,pool]==3.3.6
+pydantic==2.13.5
+anthropic==1.6.0
+voyageai==0.5.0
