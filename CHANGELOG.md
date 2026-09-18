@@ -8,6 +8,15 @@ Notable changes to UniConnect AI. Format follows
 
 ### Added
 
+- **Live ingestion** (`POST /messages`): every message the worker sees, so
+  the bot knows what was said today rather than what was in the last export.
+  De-duplicated, embedded immediately in the background, and it fills in real
+  names from WhatsApp pushNames as a side effect.
+- **Daily digest** (`GET /digest/<group>`): five lines on the last 24 hours,
+  each under 25 words, each cited, language pinnable for a bilingual group.
+- **Call recaps** (`GET /recap/latest/<group>`): decisions, action items with
+  owners, and open questions from a transcribed call. An action item whose
+  owner the transcript does not name says so instead of guessing.
 - **Prompt-injection defences.** Retrieved messages are fenced in
   `<group_messages>`, closing tags inside a message are defanged so nobody can
   end the block early, the system prompt states that nothing inside can change
@@ -80,6 +89,19 @@ Notable changes to UniConnect AI. Format follows
   coverage metric a meaningless 100% and let the hourly limit be bypassed
   entirely by asking questions that match nothing. Measured coverage on real
   traffic dropped from a flattering 100% to an honest 13%.
+- **Reciprocal rank fusion buried anything found by only one search arm.** A
+  message that arrived seconds ago has no vector yet, so it could only be
+  found by its words - and sat at rank 1 of the full text arm while never
+  reaching the model. "When is the rehearsal?", asked a minute after somebody
+  answered it, found nothing. Each arm's top two now always survive.
+- **An answer marked unhelpful was reused for thirty days**, so a bad answer
+  was served to everybody who asked the same thing and the thumbs-down did
+  nothing at all.
+- **Generation failures returned 500.** An overloaded model, a rate limit or
+  an expired key took the bot off the air instead of degrading to a quoted
+  source, which is what the rest of the system already did.
+- **Transcription demanded ffmpeg for files that did not need it.** A voice
+  note in an accepted format under 20 MB is now uploaded untouched.
 - **The API crash-looped when the database was unreachable.** Startup waited
   on the connection pool and raised, so with `restart: unless-stopped` the
   container restarted forever with no way in to diagnose it — the opposite of

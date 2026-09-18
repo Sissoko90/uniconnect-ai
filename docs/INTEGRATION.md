@@ -22,6 +22,38 @@ In the group, write only when one of these is true:
 In a private chat, always answer. This is the whole product argument: the
 group has a noise problem and we must not add to it.
 
+## First: send us every message
+
+Before anything else. Without this the bot answers from the last chat export
+and gets more wrong every day — on Monday it would not know what was said on
+Sunday.
+
+Call this for **every** message the worker sees, mentioned or not. That is the
+silent rule doing real work: reading everything, writing almost nothing.
+
+```js
+await fetch("http://127.0.0.1:8000/messages", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    group_id: METI_GROUP_JID,
+    messages: [{
+      author: msg.key.participant || msg.key.remoteJid,
+      author_name: msg.pushName,          // this is what puts names in citations
+      content: text,
+      said_at: Number(msg.messageTimestamp),   // seconds, or an ISO string
+    }],
+  }),
+});
+```
+
+Safe to call twice with the same message — duplicates are dropped — so a
+reconnect that replays history does no harm. It takes a list, so you can batch.
+
+`author_name` matters more than it looks: it is the only source of real names
+for members who joined after the export was taken. Send it every time and the
+bot stops citing `+229…42`.
+
 ## Answering a question
 
 ```js
@@ -104,6 +136,34 @@ POST /people {
 Send it whenever you see a name you have not sent before — a small in-memory
 set of JIDs you have already posted is enough. Batch them, it takes a list.
 The API matches `2239…@s.whatsapp.net` to `+223 9…` in the history by itself.
+
+## The two things the bot says unprompted
+
+Both are generated on request and posted by you. The API never sends
+anything by itself — the rule about when the bot may speak lives in the
+worker, in one place.
+
+**The daily digest.** Once a day, at a fixed hour:
+
+```js
+GET /digest/<group_id>?lang=en     // or ?day=2026-09-21 for a specific day
+→ { digest, message_count, quiet, since, until }
+```
+
+Five lines, each under 25 words, each cited. `quiet: true` means nothing
+happened worth posting — post nothing, do not announce the silence. `lang`
+pins the language; without it the model picks, which makes the bot look
+erratic across days in a bilingual group.
+
+**A call recap.** After a recording has been transcribed:
+
+```js
+GET /recap/latest/<group_id>       // or /recap/<source_id>
+→ { title, occurred_at, blocks, recap }
+```
+
+Decisions, action items with owners, open questions. An action item whose
+owner the transcript does not name says so rather than guessing.
 
 ## Feedback
 

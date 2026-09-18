@@ -39,6 +39,37 @@ def test_a_long_monologue_is_split():
     assert all(len(b["text"]) <= transcribe.BLOCK_CHARS + 100 for b in blocks)
 
 
+def test_a_usable_file_needs_no_ffmpeg(tmp_path):
+    """A voice note or a short recording is uploaded untouched. Refusing it
+    because a conversion tool is missing would be gratuitous - and ffmpeg is
+    not installed on every machine in this team."""
+    path = tmp_path / "call.m4a"
+    path.write_bytes(b"x" * 1000)
+
+    assert transcribe.ready_as_is(str(path))
+
+
+def test_a_file_too_large_is_not_usable_as_is(tmp_path):
+    path = tmp_path / "long-call.m4a"
+    path.write_bytes(b"x" * (transcribe.MAX_UPLOAD_MB * 1_000_000 + 1))
+
+    assert not transcribe.ready_as_is(str(path))
+
+
+def test_an_unsupported_format_is_not_usable_as_is(tmp_path):
+    path = tmp_path / "recording.aiff"
+    path.write_bytes(b"x" * 1000)
+
+    assert not transcribe.ready_as_is(str(path))
+
+
+def test_every_accepted_extension_has_a_content_type():
+    """Python's mimetypes calls a .m4a "audio/mp4a-latm", which the API
+    rejects. The types are declared, not guessed."""
+    for extension in transcribe.ACCEPTED:
+        assert transcribe.CONTENT_TYPES[extension].startswith("audio/")
+
+
 def test_block_start_is_the_first_segment_start():
     """The block's timestamp places it on the group's timeline, so it has to
     be when the passage started, not when it ended."""

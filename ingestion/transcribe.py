@@ -41,8 +41,33 @@ BLOCK_SECONDS = 45
 BLOCK_CHARS = 700
 
 
+# What Groq accepts directly. A file already in one of these, and small
+# enough, needs no conversion at all - which means a voice note or a short
+# recording can be transcribed on a machine with no ffmpeg installed.
+CONTENT_TYPES = {
+    ".flac": "audio/flac",
+    ".mp3": "audio/mpeg",
+    ".mpeg": "audio/mpeg",
+    ".mpga": "audio/mpeg",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".wav": "audio/wav",
+    ".webm": "audio/webm",
+}
+ACCEPTED = set(CONTENT_TYPES)
+
+
 def have_ffmpeg() -> bool:
     return shutil.which("ffmpeg") is not None
+
+
+def ready_as_is(path: str) -> bool:
+    """True when the file can be uploaded untouched."""
+    return (
+        os.path.splitext(path)[1].lower() in ACCEPTED
+        and os.path.getsize(path) / 1_000_000 <= MAX_UPLOAD_MB
+    )
 
 
 def to_audio(path: str, workdir: str) -> str:
@@ -84,11 +109,17 @@ def split(path: str, workdir: str, seconds: int = CHUNK_SECONDS) -> list[tuple[s
 def transcribe_chunk(path: str, offset: float, api_key: str) -> list[dict]:
     import requests
 
+    # Declared from the extension rather than guessed: Python's mimetypes
+    # calls a .m4a "audio/mp4a-latm", which the API does not accept.
+    content_type = CONTENT_TYPES.get(
+        os.path.splitext(path)[1].lower(), "application/octet-stream"
+    )
+
     with open(path, "rb") as fh:
         response = requests.post(
             GROQ_URL,
             headers={"Authorization": f"Bearer {api_key}"},
-            files={"file": (os.path.basename(path), fh, "audio/flac")},
+            files={"file": (os.path.basename(path), fh, content_type)},
             data={
                 "model": MODEL,
                 # verbose_json is what carries the timestamps. Without them a
@@ -170,8 +201,18 @@ def main() -> int:
     if not api_key:
         print("GROQ_API_KEY is not set.", file=sys.stderr)
         return 1
-    if not have_ffmpeg():
-        print("ffmpeg is not installed: apt install ffmpeg", file=sys.stderr)
+    # ffmpeg is only needed to convert or to split. A one-hour Zoom recording
+    # needs both; a ten-minute voice note needs neither, and refusing to
+    # transcribe it because a tool is missing would be gratuitous.
+    as_is = ready_as_is(args.file)
+    if not as_is and not have_ffmpeg():
+        print(
+            f"This file needs converting or splitting, and ffmpeg is not installed.\n"
+            f"  install it:  sudo apt install ffmpeg   (or: brew install ffmpeg)\n"
+            f"  or convert it yourself to one of: {', '.join(sorted(ACCEPTED))}, "
+            f"under {MAX_UPLOAD_MB} MB",
+            file=sys.stderr,
+        )
         return 1
 
     if args.occurred_at:
@@ -186,8 +227,12 @@ def main() -> int:
         )
 
     with tempfile.TemporaryDirectory() as workdir:
-        print("Converting to 16 kHz mono audio...")
-        audio = to_audio(args.file, workdir)
+        if as_is:
+            print(f"Uploading as is ({os.path.getsize(args.file) / 1_000_000:.1f} MB)")
+            audio = args.file
+        else:
+            print("Converting to 16 kHz mono audio...")
+            audio = to_audio(args.file, workdir)
 
         segments: list[dict] = []
         for chunk, offset in split(audio, workdir):

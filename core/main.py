@@ -9,6 +9,9 @@ features land behind them.
   POST /catchup   what one person missed, sent to them privately
   POST /people    tell us someone's name, so citations stop printing numbers
   POST /feedback  was that answer useful
+  POST /messages  every message the worker sees, so the bot stays current
+  GET  /recap/... decisions and action items from a transcribed call
+  GET  /digest/.. five lines on the last 24 hours
   GET  /metrics   usage, as JSON
   GET  /metrics/page  the same, as a page for the judges
   GET  /health    is this thing alive
@@ -23,6 +26,7 @@ import catchup as catchup_engine
 import ingest
 import limits
 import metrics as metrics_engine
+import recap
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from psycopg_pool import ConnectionPool
@@ -273,6 +277,43 @@ def feedback(req: FeedbackRequest) -> dict:
     if row is None:
         raise HTTPException(status_code=404, detail="no answer to rate yet")
     return {"rated": str(row[0])}
+
+
+# --------------------------------------------------------------------------
+# Recaps and the daily digest
+# --------------------------------------------------------------------------
+#
+# The only two things the bot says without being asked. Both are generated
+# here and posted by the worker, never sent from here: the rule about when the
+# bot may speak in the group lives in one place, and it is not this one.
+
+
+@app.get("/recap/{source_id}")
+def call_recap(source_id: str) -> dict:
+    """Decisions, action items and open questions from one transcribed call."""
+    result = recap.call_recap(pool, source_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@app.get("/recap/latest/{group_id}")
+def latest_call_recap(group_id: str) -> dict:
+    """The most recent call, for a worker that does not track call ids."""
+    source_id = recap.latest_call(pool, group_id)
+    if source_id is None:
+        raise HTTPException(status_code=404, detail="no transcribed call for this group")
+    return recap.call_recap(pool, source_id)
+
+
+@app.get("/digest/{group_id}")
+def daily_digest(group_id: str, day: str | None = None, lang: str | None = None) -> dict:
+    """Five lines on the last 24 hours, or on `day` (YYYY-MM-DD, UTC).
+
+    `quiet` true means nothing happened worth posting. That is a result, not
+    an error: the worker should post nothing rather than announce silence.
+    """
+    return recap.daily_digest(pool, group_id, day, lang)
 
 
 # --------------------------------------------------------------------------

@@ -22,10 +22,10 @@ async function connectToWhatsApp() {
     if (connection === 'close') {
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('❌ Connection closed. Reconnecting...', shouldReconnect);
+      console.log('Connection closed. Reconnecting...', shouldReconnect);
       if (shouldReconnect) connectToWhatsApp();
     } else if (connection === 'open') {
-      console.log('✅ WhatsApp Bot is ONLINE and listening in groups!');
+      console.log('WhatsApp Bot is ONLINE and listening in groups!');
     }
   });
 
@@ -48,11 +48,11 @@ async function connectToWhatsApp() {
 
       // Group Chat Logic: Only reply if starts with @ask
       if (text.toLowerCase().startsWith('@ask')) {
-        console.log(`🏓 Triggered in group by: "${text}". Replying "pong"...`);
+        console.log(`Triggered in group by: "${text}". Replying "pong"...`);
         await sock.sendMessage(remoteJid, { text: 'pong' }, { quoted: msg });
       } else {
         // Silent background reading for database indexing
-        console.log(`🤫 [Group Log - Silent]: ${text}`);
+        console.log(`[Group Log - Silent]: ${text}`);
       }
     }
   });

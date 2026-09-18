@@ -160,23 +160,37 @@ the only source that covers members who joined after the export was taken.
 ## 8. Add a call recording
 
 ```bash
-sudo apt install ffmpeg      # required, for audio conversion and splitting
-
-python ingestion/transcribe.py call.mp4 --group-id meti-cohort-1 \
+python ingestion/transcribe.py call.m4a --group-id meti-cohort-1 \
     --title "Weekly call, 22 Sept" --occurred-at 2026-09-22T18:00:00Z
 python ingestion/embed.py    # transcripts need embedding too
 ```
 
-Video is converted to 16 kHz mono audio and split automatically if it is over
-the upload limit. Whisper does not label speakers, so a transcript block is
-cited as the call itself, never attributed to a member by guesswork.
+A file already in an accepted audio format and under 20 MB is uploaded
+untouched — a voice note or a short recording needs nothing installed.
+
+```bash
+sudo apt install ffmpeg      # only for video, or recordings over 20 MB
+```
+
+With ffmpeg, video is converted to 16 kHz mono audio and split automatically.
+Whisper does not label speakers, so a transcript block is cited as the call
+itself, never attributed to a member by guesswork.
+
+Then get the recap:
+
+```bash
+curl -s localhost:8000/recap/latest/meti-cohort-1
+```
 
 ## The endpoints
 
 | Endpoint | What it is for |
 |---|---|
 | `POST /ask` | answer a question, with citations. The frozen contract. |
+| `POST /messages` | every message the worker sees — what keeps the bot current |
 | `POST /catchup` | what one person missed; moves their bookmark forward |
+| `GET /digest/<group>` | five lines on the last 24 hours |
+| `GET /recap/latest/<group>` | decisions and action items from the last call |
 | `POST /people` | tell the API someone's name |
 | `POST /feedback` | rate the last answer a person got |
 | `GET /metrics` | usage figures, as JSON |
