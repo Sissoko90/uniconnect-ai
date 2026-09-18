@@ -1,0 +1,41 @@
+version: 2
+
+updates:
+  # The API container's dependencies. Grouped into one pull request a week:
+  # five separate bumps during a hackathon is noise nobody will review.
+  - package-ecosystem: pip
+    directory: /core
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      core-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /ingestion
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      ingestion-dependencies:
+        patterns: ["*"]
+
+  # Actions are pinned by major tag; this catches the ones that go stale.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The postgres and python base images.
+  - package-ecosystem: docker
+    directory: /core
+    schedule:
+      interval: weekly
+      day: monday
