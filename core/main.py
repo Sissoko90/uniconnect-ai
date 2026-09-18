@@ -14,14 +14,16 @@ features land behind them.
   GET  /health    is this thing alive
 """
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 
 import answer as answer_engine
 import catchup as catchup_engine
+import ingest
 import limits
 import metrics as metrics_engine
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
@@ -29,6 +31,29 @@ from pydantic import BaseModel, Field
 DATABASE_URL = os.environ["DATABASE_URL"]
 
 pool: ConnectionPool | None = None
+
+
+# How often the background pass looks for messages that arrived without a
+# vector. Long enough not to hammer the embedding API, short enough that a
+# question about something said two minutes ago still finds it by meaning -
+# and until it does, full text search finds it by its words.
+EMBED_INTERVAL_SECONDS = int(os.environ.get("EMBED_INTERVAL_SECONDS", "60"))
+
+
+async def embed_loop():
+    """Give vectors to live messages, without a cron job to forget to set up.
+
+    Runs inside the API rather than as a separate service because it is four
+    lines of work and one more container to deploy, monitor and restart is
+    four lines too many two days before shipping.
+    """
+    while True:
+        await asyncio.sleep(EMBED_INTERVAL_SECONDS)
+        # to_thread: the pool and the embedding client are both synchronous,
+        # and blocking the event loop here would stall every request.
+        n = await asyncio.to_thread(ingest.embed_pending, pool)
+        if n:
+            print(f"embedded {n} live messages", flush=True)
 
 
 @asynccontextmanager
@@ -44,7 +69,10 @@ async def lifespan(app: FastAPI):
     # restart, the moment the database answers again.
     pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=10, open=False)
     pool.open()
+
+    embedder = asyncio.create_task(embed_loop())
     yield
+    embedder.cancel()
     pool.close()
 
 
@@ -114,6 +142,60 @@ def catch_up(req: CatchupRequest) -> dict:
     return catchup_engine.catch_up(
         pool, user=req.user, group_id=req.group_id, question=req.question
     )
+
+
+# --------------------------------------------------------------------------
+# Live ingestion
+# --------------------------------------------------------------------------
+
+
+class IncomingMessage(BaseModel):
+    author: str                       # WhatsApp JID, or a phone number
+    content: str = Field(min_length=1, max_length=20000)
+    said_at: str | int | float        # ISO 8601, or seconds since the epoch
+    author_name: str | None = None    # pushName, when WhatsApp provides one
+    permalink: str | None = None
+    lang: str | None = None
+
+
+class MessagesRequest(BaseModel):
+    group_id: str
+    messages: list[IncomingMessage] = Field(max_length=500)
+
+
+@app.post("/messages")
+def ingest_messages(req: MessagesRequest, background: BackgroundTasks) -> dict:
+    """Every message the worker sees, mentioned or not.
+
+    This is what keeps the bot current. Without it the history stops at the
+    last chat export, and by Wednesday the bot is answering questions about
+    last Friday.
+
+    Safe to call repeatedly with the same messages: the unique index drops
+    the duplicates, so a worker that reconnects and replays does no harm.
+    """
+    messages = [
+        {
+            "author": m.author,
+            "author_name": m.author_name,
+            "content": m.content,
+            "said_at": ingest.parse_time(m.said_at),
+            "permalink": m.permalink,
+            "lang": m.lang,
+        }
+        for m in req.messages
+    ]
+    result = ingest.store(pool, req.group_id, messages)
+
+    # Embed straight away rather than waiting for the periodic pass. Until a
+    # message has a vector it can only be found by its exact words, and it
+    # loses every ranking contest against messages that appear in both search
+    # arms - so "when is the rehearsal", asked a minute after somebody said
+    # it, would find nothing. The reply to the worker does not wait for this.
+    if result["stored"]:
+        background.add_task(ingest.embed_pending, pool)
+
+    return result
 
 
 # --------------------------------------------------------------------------

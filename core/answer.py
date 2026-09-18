@@ -188,7 +188,18 @@ left join fts on fts.id = u.id
 -- A citation prints a name when we know one, the raw handle otherwise.
 left join people p on p.group_id = s.group_id and p.handle_norm = u.author_norm
 where vec.id is not null or fts.id is not null
-order by score desc
+order by
+  -- Whatever the fusion says, each arm's own best two results are worth
+  -- reading. Plain reciprocal rank fusion adds one vote per arm, so a
+  -- message found by a single arm scores below anything found by both -
+  -- however sure that arm is. The arms do not cover the same ground here:
+  -- a message that arrived seconds ago has no vector yet, so it can only
+  -- ever be found by its words, and it was being buried while sitting at
+  -- rank 1 of the full text arm. "When is the rehearsal?", asked a minute
+  -- after somebody answered it, found nothing.
+  case when coalesce(vec.rank, 99) <= 2 or coalesce(fts.rank, 99) <= 2
+       then 0 else 1 end,
+  score desc
 limit %(limit)s
 """
 
@@ -403,6 +414,10 @@ where a.group_id = %(group_id)s
   and a.question_embedding is not null
   -- An answer that found nothing is not worth repeating.
   and a.cited_ids is not null and array_length(a.cited_ids, 1) > 0
+  -- Nor is one somebody marked unhelpful. Without this a bad answer is
+  -- frozen for thirty days and served to everybody who asks the same thing,
+  -- and the thumbs-down does nothing at all.
+  and coalesce(a.rating, 0) >= 0
   and a.asked_at > now() - make_interval(days => %(max_age)s)
   -- Only ever match a question of the same kind. A question asked in a
   -- direct message must never come back as "this was already answered" in
@@ -560,12 +575,21 @@ def answer_question(
     degraded = limits.over_spend_cap(pool)
 
     if generation_available() and not degraded:
-        text, cited, usage = generate(question, hits)
-        # Only return the messages Claude actually used. Citations the reader
-        # cannot match to a sentence are noise.
-        used = [hits[i - 1] for i in cited] if cited else hits[:1]
-        if cited:
-            text = renumber_citations(text, cited)
+        try:
+            text, cited, usage = generate(question, hits)
+            # Only return the messages Claude actually used. Citations the
+            # reader cannot match to a sentence are noise.
+            used = [hits[i - 1] for i in cited] if cited else hits[:1]
+            if cited:
+                text = renumber_citations(text, cited)
+        except Exception as exc:  # noqa: BLE001
+            # An overloaded model, a rate limit, an expired key or a refusal
+            # must not become a 500 in front of the group. We already have
+            # the messages; quoting the best one is a worse answer, not no
+            # answer, and it is still sourced and still invents nothing.
+            print(f"generation failed, quoting the best match instead: {exc}", flush=True)
+            text, used = _quote_best(question, hits)
+            degraded = True
     else:
         text, used = _quote_best(question, hits)
 

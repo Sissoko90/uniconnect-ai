@@ -61,6 +61,31 @@ def embed_query(text: str) -> list[float] | None:
         return None
 
 
+def embed_documents(texts: list[str]) -> list[list[float]] | None:
+    """Vectors for stored messages, or None when that is not possible.
+
+    None rather than an exception, for the same reason as embed_query: the
+    caller is a background pass that must leave the rows alone and try again,
+    not crash the API it runs inside.
+    """
+    if not available() or not texts:
+        return None
+
+    try:
+        result = _client_once().embed(
+            texts,
+            model=MODEL,
+            # "document", not "query": these are the messages being searched,
+            # not the question asked about them.
+            input_type="document",
+            output_dimension=DIM,
+        )
+        return result.embeddings
+    except Exception as exc:  # noqa: BLE001 - the next pass picks them up
+        print(f"document embedding failed, leaving rows for the next pass: {exc}", flush=True)
+        return None
+
+
 def to_pgvector(vector: list[float]) -> str:
     """pgvector's text input format, e.g. '[0.1,0.2]'.
 

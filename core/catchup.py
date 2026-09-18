@@ -131,7 +131,14 @@ def catch_up(pool, user: str, group_id: str, question: str | None = None) -> dic
         }
 
     if answer_engine.generation_available():
-        summary = _summarise(rows, question, truncated)
+        try:
+            summary = _summarise(rows, question, truncated)
+        except Exception as exc:  # noqa: BLE001
+            # Same rule as /ask: a model failure degrades the briefing, it
+            # does not become a 500 for somebody who just asked what they
+            # missed. The count is thin but true.
+            print(f"catch-up summary failed, falling back to counts: {exc}", flush=True)
+            summary = _count_only(rows)
     else:
         summary = _count_only(rows)
 
