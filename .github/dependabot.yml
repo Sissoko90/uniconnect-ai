@@ -33,9 +33,18 @@ updates:
       actions:
         patterns: ["*"]
 
-  # The postgres and python base images.
+  # The python base image.
   - package-ecosystem: docker
     directory: /core
     schedule:
       interval: weekly
       day: monday
+    ignore:
+      # Patch and minor updates only. A major bump moves the runtime - 3.12
+      # to 3.14 was proposed on day one - while CI still tests on 3.12 and
+      # the dependencies are only pinned for it. Changing the interpreter
+      # under a running project is a decision, not a routine update: do it
+      # deliberately, bumping the Dockerfile and the CI python-version
+      # together.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major"]
