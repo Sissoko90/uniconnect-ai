@@ -33,10 +33,16 @@ pool: ConnectionPool | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
-    # open=False then .open(): lets the API boot even if Postgres is a few
-    # seconds behind, instead of crash-looping on startup.
+    # The pool opens in the background and is never waited on here. Waiting
+    # would mean that a database which is slow to start, or briefly down,
+    # kills the API at boot - and with restart: unless-stopped that becomes a
+    # crash loop with no way in to diagnose it.
+    #
+    # Instead the API always comes up, and /health reports 503 for as long as
+    # the database is unreachable. It then recovers on its own, with no
+    # restart, the moment the database answers again.
     pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=10, open=False)
-    pool.open(wait=True, timeout=30)
+    pool.open()
     yield
     pool.close()
 
@@ -194,7 +200,10 @@ def metrics_page() -> str:
 def health():
     """Used by the bot, the web page and anyone debugging the VPS at 2am."""
     try:
-        with pool.connection() as conn:
+        # A short timeout on purpose: a health check that hangs for thirty
+        # seconds before admitting the database is down is useless to the
+        # person watching it, and to anything polling it.
+        with pool.connection(timeout=2) as conn:
             n = conn.execute("select count(*) from utterances").fetchone()[0]
     except Exception as exc:
         raise HTTPException(

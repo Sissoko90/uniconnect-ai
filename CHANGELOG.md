@@ -55,6 +55,12 @@ Notable changes to UniConnect AI. Format follows
   fully parameterised query.
 - **The group's chat exports and the Baileys session keys were not
   git-ignored.**
+- **The API crash-looped when the database was unreachable.** Startup waited
+  on the connection pool and raised, so with `restart: unless-stopped` the
+  container restarted forever with no way in to diagnose it — the opposite of
+  what the code comment claimed. It now always starts, reports 503 from
+  `/health` within two seconds while the database is down, and recovers on
+  its own without a restart. Caught by CI, not by reading the code.
 - `--dry-run` on the parser no longer requires a database driver.
 
 ### Security
