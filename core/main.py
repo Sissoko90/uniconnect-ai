@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 
 import answer as answer_engine
 import catchup as catchup_engine
+import limits
 import metrics as metrics_engine
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -63,9 +64,16 @@ class Source(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=1)
+    # Capped: a pasted document is not a question, and the cost of reading one
+    # scales with its length.
+    question: str = Field(min_length=1, max_length=2000)
     user: str
     group_id: str
+    # True when the question arrived in a direct message. group_id stays the
+    # GROUP's id either way - that is what is being searched - and this says
+    # where the answer is going. It keeps private questions out of the
+    # duplicate detection that speaks in front of the group.
+    private: bool = False
 
 
 class AskResponse(BaseModel):
@@ -80,7 +88,11 @@ class AskResponse(BaseModel):
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest) -> AskResponse:
     result = answer_engine.answer_question(
-        pool, question=req.question, user=req.user, group_id=req.group_id
+        pool,
+        question=req.question,
+        user=req.user,
+        group_id=req.group_id,
+        private=req.private,
     )
     return AskResponse(**result)
 
@@ -216,4 +228,9 @@ def health():
         # So a glance at /health says which half of the pipeline is degraded.
         "generation": answer_engine.generation_available(),
         "embeddings": answer_engine.embeddings.available(),
+        # And what it has cost today, so nobody has to open a billing console
+        # to find out why answers suddenly got blunter.
+        "spend_today_usd": round(limits.spend_today_usd(pool), 4),
+        "spend_cap_usd": limits.DAILY_SPEND_CAP_USD,
+        "capped": limits.over_spend_cap(pool),
     }

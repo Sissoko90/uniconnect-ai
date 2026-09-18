@@ -110,6 +110,19 @@ create table answers (
   asked_at timestamptz default now(),
   rating int,                  -- 1 = helpful, -1 = not helpful, null = no feedback
 
+  -- Asked in a direct message rather than in the group.
+  --
+  -- What a member asks privately is private, even though the answer is built
+  -- from messages the whole group can already read. Duplicate detection only
+  -- ever matches questions of the same kind, so the bot can never announce to
+  -- the group that somebody asked something in private.
+  asked_privately boolean not null default false,
+
+  -- What the answer actually cost, as reported by the API rather than
+  -- estimated. This is what the daily spend cap is measured against.
+  input_tokens int,
+  output_tokens int,
+
   -- The question, embedded. Duplicate detection is a similarity search over
   -- this column. Added now rather than Tuesday because altering a populated
   -- table mid-hackathon is how we lose an evening.
@@ -119,6 +132,10 @@ create table answers (
 create index answers_embedding_idx
   on answers using hnsw (question_embedding vector_cosine_ops);
 create index answers_group_idx on answers (group_id, asked_at desc);
+
+-- Rate limiting counts a person's recent questions on every request, so it
+-- gets its own index rather than scanning the table each time.
+create index answers_asker_idx on answers (asked_by, asked_at desc);
 
 -- Who is who.
 --
