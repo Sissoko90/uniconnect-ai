@@ -373,11 +373,24 @@ def record(
 # --------------------------------------------------------------------------
 
 # Cosine distance under which two questions count as the same question.
-# 0 is identical, 1 is unrelated. 0.15 was chosen to catch rewordings
-# ("where are the recordings" / "link to the recordings") without merging two
-# genuinely different questions about the same topic. Tune it with
-# DUPLICATE_DISTANCE once we see real traffic.
-DUPLICATE_DISTANCE = float(os.environ.get("DUPLICATE_DISTANCE", "0.15"))
+# 0 is identical, 1 is unrelated.
+#
+# 0.30, measured rather than guessed. The first guess was 0.15, which caught
+# nothing: two near-identical questions asked minutes apart sat at 0.20 and
+# were both answered from scratch. Distances on our own questions:
+#
+#     0.07   "When is the Open Hour?" / "What time does the Open Hour start?"
+#     0.08   the same question in English and in French
+#     0.29   "What are the deliverables?" / "What do we have to submit?"
+#     -----  threshold sits here
+#     0.44   two different questions about the same subject
+#     0.82   unrelated subjects
+#
+# The gap between a reworded question and a genuinely different one is wide,
+# so the exact value matters less than being inside it. Erring low on purpose:
+# serving a stale answer to a real question costs the group's trust, while
+# missing a duplicate costs 1.7 cents.
+DUPLICATE_DISTANCE = float(os.environ.get("DUPLICATE_DISTANCE", "0.30"))
 
 # Beyond this, the group has moved on and the old answer may be stale.
 DUPLICATE_MAX_AGE_DAYS = int(os.environ.get("DUPLICATE_MAX_AGE_DAYS", "30"))
