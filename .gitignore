@@ -1,26 +1,90 @@
+# ============================================================================
+# Secrets. Nothing in this block is ever recoverable once pushed - a key
+# removed in a later commit is still a published key and must be rotated.
+# ============================================================================
 .env
-__pycache__/
-*.pyc
-.venv/
-node_modules/
+.env.*
+!.env.example
 
-# --- The group's data. Never commit a conversation. -------------------------
-# The exports are members' private messages. They belong on the VPS and in
-# the database, not in a public repository.
+# Baileys writes the linked-session keys here. Anyone holding them can send
+# WhatsApp messages as the bot's number.
+auth_info*/
+*.session
+*.pem
+*.key
+credentials.json
+
+# ============================================================================
+# The group's data. Never commit a conversation.
+#
+# These are the private messages of 153 people, including their phone
+# numbers. Keep them OUTSIDE this directory: "git clean -fdx" deletes ignored
+# files too, and would take the exports with it.
+# ============================================================================
 *.zip
 WhatsApp Chat with *
 exports/
 data/
-/data/*
+transcripts/
 
-# --- Credentials ------------------------------------------------------------
-# Baileys writes the linked-session keys here. Anyone holding them can send
-# messages as the bot's phone number.
-auth_info*/
-*.session
-
-# --- Media and scratch ------------------------------------------------------
+# Recordings and the audio extracted from them.
 *.mp3
 *.wav
+*.m4a
+*.mp4
+*.ogg
+*.flac
+*.opus
+
+# ============================================================================
+# Python
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ============================================================================
+# Node - the Baileys worker and the Next.js page
+# ============================================================================
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+*.tsbuildinfo
+
+# ============================================================================
+# Local overrides and databases
+# ============================================================================
+docker-compose.override.yml
 *.sqlite
+*.sqlite3
+*.dump
+
+# ============================================================================
+# Editors and operating systems
+#
+# .claude/settings.local.json holds per-machine tool permissions. It is
+# ignored by one developer's global git config, which does nothing for the
+# other four - so it is declared here, for everyone.
+# ============================================================================
+.claude/settings.local.json
+.idea/
+.vscode/
+*.swp
+*~
 .DS_Store
+Thumbs.db
