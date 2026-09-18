@@ -30,19 +30,35 @@ def _client_once():
 
 
 def embed_query(text: str) -> list[float] | None:
+    """The question as a vector, or None when that is not possible.
+
+    None is a supported answer, not a failure: the caller falls back to full
+    text search, which still finds names, acronyms and exact phrases. A rate
+    limit, an expired key or a provider outage therefore makes the bot
+    blunter for a moment instead of taking it off the air in front of 153
+    people - which is what a raised exception here used to do, as a 500.
+
+    The error is printed rather than swallowed, so `docker compose logs api`
+    says why answers suddenly got worse.
+    """
     if not available():
         return None
-    result = _client_once().embed(
-        [text],
-        model=MODEL,
-        # "query" and "document" are embedded differently by Voyage, and
-        # mixing them up quietly costs retrieval quality.
-        input_type="query",
-        # Pinned rather than left to the model default, so a change upstream
-        # cannot silently produce vectors the vector(1024) column rejects.
-        output_dimension=DIM,
-    )
-    return result.embeddings[0]
+
+    try:
+        result = _client_once().embed(
+            [text],
+            model=MODEL,
+            # "query" and "document" are embedded differently by Voyage, and
+            # mixing them up quietly costs retrieval quality.
+            input_type="query",
+            # Pinned rather than left to the model default, so a change
+            # upstream cannot silently produce vectors the column rejects.
+            output_dimension=DIM,
+        )
+        return result.embeddings[0]
+    except Exception as exc:  # noqa: BLE001 - any failure degrades, none kills
+        print(f"embedding unavailable, falling back to full text search: {exc}", flush=True)
+        return None
 
 
 def to_pgvector(vector: list[float]) -> str:

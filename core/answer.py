@@ -109,6 +109,50 @@ def generation_available() -> bool:
 # 1. Retrieval
 # --------------------------------------------------------------------------
 
+# Words carried by almost every question in either language. With the 'simple'
+# text search configuration Postgres removes no stop words at all - that is
+# the price of handling English and French in one index - so we remove them
+# ourselves before building the query.
+STOPWORDS = {
+    # English
+    "the", "and", "for", "are", "was", "were", "you", "your", "our", "what",
+    "when", "where", "who", "why", "how", "which", "that", "this", "with",
+    "from", "have", "has", "had", "can", "did", "does", "do", "is", "it",
+    "about", "any", "all", "get", "got", "there", "here", "some", "please",
+    # French
+    "les", "des", "une", "un", "le", "la", "de", "du", "et", "ou", "est",
+    "sont", "pour", "avec", "dans", "sur", "que", "qui", "quoi", "quand",
+    "comment", "pourquoi", "quel", "quelle", "quels", "quelles", "nous",
+    "vous", "ils", "elles", "ce", "cette", "ces", "son", "sa", "ses", "au",
+    "aux", "par", "plus", "mais", "tout", "tous", "toute", "toutes", "on",
+}
+
+
+def to_tsquery(question: str) -> str | None:
+    """Turn a question into a full text query that can actually match.
+
+    `websearch_to_tsquery` and `plainto_tsquery` both AND every term
+    together, so "What is the project deadline?" only matches a message
+    containing all of "what", "is", "the", "project" and "deadline" - which
+    is essentially no message ever written. The full text arm was therefore
+    finding almost nothing, invisible for as long as the vector arm carried
+    the search and catastrophic the moment embeddings were unavailable.
+
+    The terms are ORed instead, and ts_rank does the discriminating: a
+    message matching four of the words outranks one matching a single word.
+    That is what the arm is for - recall on exact names and acronyms - while
+    the vector arm supplies precision on meaning.
+
+    Tokens are stripped to word characters, so nothing reaches tsquery that
+    could be read as its syntax.
+    """
+    words = [w for w in re.findall(r"\w+", question.lower()) if len(w) > 2]
+    kept = [w for w in words if w not in STOPWORDS]
+    # A question made only of common words still deserves an attempt.
+    kept = kept or words
+    return " | ".join(kept) if kept else None
+
+
 # Reciprocal rank fusion: each arm votes with 1/(k + its rank), and the votes
 # are added. It needs no score calibration between the two arms, which is the
 # hard part of mixing cosine distance with ts_rank.
@@ -125,12 +169,12 @@ with vec as (
 fts as (
     select u.id,
            row_number() over (
-               order by ts_rank(u.fts, websearch_to_tsquery('simple', %(question)s)) desc
+               order by ts_rank(u.fts, to_tsquery('simple', %(tsq)s)) desc
            ) as rank
     from utterances u
     join sources s on s.id = u.source_id
     where s.group_id = %(group_id)s
-      and u.fts @@ websearch_to_tsquery('simple', %(question)s)
+      and u.fts @@ to_tsquery('simple', %(tsq)s)
     limit %(candidates)s
 )
 select u.id, coalesce(p.display_name, u.author) as author,
@@ -151,12 +195,12 @@ limit %(limit)s
 FTS_ONLY_SQL = """
 select u.id, coalesce(p.display_name, u.author) as author,
        u.said_at, u.content, u.permalink,
-       ts_rank(u.fts, websearch_to_tsquery('simple', %(question)s)) as score
+       ts_rank(u.fts, to_tsquery('simple', %(tsq)s)) as score
 from utterances u
 join sources s on s.id = u.source_id
 left join people p on p.group_id = s.group_id and p.handle_norm = u.author_norm
 where s.group_id = %(group_id)s
-  and u.fts @@ websearch_to_tsquery('simple', %(question)s)
+  and u.fts @@ to_tsquery('simple', %(tsq)s)
 order by score desc
 limit %(limit)s
 """
@@ -181,6 +225,9 @@ def search(
         "limit": limit,
         "candidates": CANDIDATES,
         "rrf_k": RRF_K,
+        # An empty query would make to_tsquery raise; a token that appears in
+        # no message simply matches nothing, which is the behaviour we want.
+        "tsq": to_tsquery(question) or "zzzznomatch",
     }
 
     if qvec is not None:

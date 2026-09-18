@@ -100,6 +100,40 @@ def test_a_message_cannot_close_the_fence_early():
     assert formatted.endswith("</group_messages>")
 
 
+def test_common_words_are_dropped_from_the_full_text_query():
+    """With the 'simple' configuration Postgres removes no stop words, so a
+    query built straight from a question required "what", "is" and "the" to
+    appear in the message. The full text arm found essentially nothing."""
+    assert answer.to_tsquery("What is the project deadline?") == "project | deadline"
+    assert answer.to_tsquery("Quand a lieu l'Open Hour ?") == "lieu | open | hour"
+
+
+def test_terms_are_combined_with_or_not_and():
+    """ANDing is why it matched nothing: no message contains every word of a
+    question. ts_rank does the discriminating instead."""
+    query = answer.to_tsquery("deadline for the hackathon submission")
+
+    assert "&" not in query
+    assert query == "deadline | hackathon | submission"
+
+
+def test_a_question_of_only_common_words_still_tries():
+    """Better a weak query than none: dropping every term would mean the
+    full text arm silently sits out the search."""
+    assert answer.to_tsquery("what is it about") is not None
+
+
+def test_tsquery_syntax_cannot_leak_in_from_the_question():
+    """Anything not a word character is stripped, so a question cannot reach
+    tsquery as operators and make the query raise - which would turn one
+    cheeky question into a 500 for everybody."""
+    query = answer.to_tsquery("deadline & (hackathon | !submission) <-> foo:*")
+
+    assert query is not None
+    for forbidden in "&()!<>:*":
+        assert forbidden not in query
+
+
 def test_citations_are_renumbered_to_match_the_sources_returned():
     """Claude numbers the six messages it was given; the reader is shown only
     the ones it cited. Found on the first real answer: it ended with [4][5]
