@@ -160,6 +160,27 @@ create table people (
 -- One row per person per group, whatever spelling they arrived under.
 create unique index people_key on people (group_id, handle_norm);
 
+-- Somebody was named in a message and has not come back to it.
+--
+-- The hackathon brief opens with "people miss messages". Everything else here
+-- answers that passively - you have to think to ask. This is the one place
+-- the bot goes looking for you, and it does it in a direct message so the
+-- group hears nothing.
+create table mentions (
+  id uuid primary key default gen_random_uuid(),
+  utterance_id uuid not null references utterances(id) on delete cascade,
+  -- Normalised on the way in, so a mention written as a JID matches the same
+  -- person seen in an export as a phone number.
+  user_norm text not null,
+  created_at timestamptz default now(),
+  -- Set once the worker confirms it has told them. Never send twice: a bot
+  -- that repeats itself in private is a bot people block.
+  notified_at timestamptz
+);
+
+create unique index mentions_key on mentions (utterance_id, user_norm);
+create index mentions_pending_idx on mentions (user_norm) where notified_at is null;
+
 -- Powers the catch-up feature: everything said after a user's last_seen_at
 -- is what they missed.
 create table user_state (

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UniConnect AI</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfaf8; --fg: #1a1a1a; --muted: #6b6b6b;
+    --line: #e4e1dc; --card: #ffffff; --accent: #1f6f5c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141516; --fg: #ececec; --muted: #9a9a9a;
+      --line: #2b2c2e; --card: #1c1d1f; --accent: #5fbfa4;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 16px 64px;
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 680px; margin-inline: auto; padding-block: 48px 0; }
+  h1 { font-size: 1.5rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .tagline { color: var(--muted); margin: 0 0 32px; font-size: .95rem; }
+  form { display: flex; gap: 8px; margin-bottom: 8px; }
+  input, button {
+    font: inherit; border-radius: 10px; border: 1px solid var(--line);
+  }
+  input {
+    flex: 1; padding: 12px 14px; background: var(--card); color: var(--fg);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 12px 18px; background: var(--accent); color: #fff;
+    border-color: transparent; cursor: pointer; font-weight: 600;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  .hint { color: var(--muted); font-size: .85rem; margin: 0 0 28px; }
+  .hint button {
+    background: none; color: var(--accent); border: none; padding: 0 2px;
+    font-weight: 400; font-size: inherit; text-decoration: underline;
+    cursor: pointer;
+  }
+  .answer {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 20px; white-space: pre-wrap;
+  }
+  .flag {
+    display: inline-block; font-size: .72rem; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; padding: 2px 9px; margin-bottom: 10px;
+  }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .source {
+    border-left: 2px solid var(--line); padding: 2px 0 2px 14px;
+    margin-bottom: 14px;
+  }
+  .who { font-size: .85rem; color: var(--muted); margin-bottom: 3px; }
+  .who b { color: var(--fg); font-weight: 600; }
+  .quote { font-size: .92rem; white-space: pre-wrap; }
+  footer {
+    margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: .85rem;
+  }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>UniConnect AI</h1>
+  <p class="tagline">
+    Ask the group's own history. Every answer cites who said it and when —
+    and if nothing in the group answers your question, it says so.
+  </p>
+
+  <form id="f">
+    <input id="q" placeholder="What is the submission deadline?" autocomplete="off" required>
+    <button id="go">Ask</button>
+  </form>
+  <p class="hint">
+    Try
+    <button type="button" data-q="What are the hackathon deliverables?">the deliverables</button>·
+    <button type="button" data-q="Quand a lieu l'Open Hour ?">l'Open Hour (en français)</button>·
+    <button type="button" data-q="Who do I contact about my Wadhwani account?">who to contact</button>
+  </p>
+
+  <div id="out" hidden></div>
+
+  <footer>
+    Same API as the WhatsApp bot · <a href="/metrics/page">usage</a> ·
+    <a href="/docs">API</a>
+  </footer>
+</main>
+
+<script>
+  // The group this page asks about. Served from the same host as the API, so
+  // the calls are relative and there is nothing to configure per deployment.
+  const GROUP = new URLSearchParams(location.search).get("group") || "meti-cohort-1";
+
+  const form = document.getElementById("f");
+  const input = document.getElementById("q");
+  const button = document.getElementById("go");
+  const out = document.getElementById("out");
+
+  document.querySelectorAll(".hint button").forEach(b =>
+    b.addEventListener("click", () => { input.value = b.dataset.q; form.requestSubmit(); })
+  );
+
+  const escape = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+  function when(iso) {
+    return new Date(iso).toLocaleString(undefined,
+      { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function render(data) {
+    // A "degraded" answer came from search alone, with no model behind it.
+    // Saying so is the point: the page never implies more than it did.
+    const flag = data.meta?.degraded
+      ? '<div class="flag">answered from search only</div>'
+      : data.meta?.duplicate
+        ? '<div class="flag">already answered before</div>' : "";
+
+    const sources = (data.sources || []).map((s, i) => `
+      <div class="source">
+        <div class="who">[${i + 1}] <b>${escape(s.author)}</b> · ${when(s.said_at)}</div>
+        <div class="quote">${escape(s.excerpt)}</div>
+      </div>`).join("");
+
+    out.innerHTML = `
+      <div class="answer">${flag}${escape(data.answer)}</div>
+      ${sources ? `<h2>Sources</h2>${sources}` : ""}`;
+    out.hidden = false;
+  }
+
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    button.disabled = true;
+    out.hidden = false;
+    out.innerHTML = '<div class="answer">Looking through the group…</div>';
+
+    try {
+      const r = await fetch("/ask", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: input.value, user: "web", group_id: GROUP }),
+      });
+      if (!r.ok) throw new Error(`the API answered ${r.status}`);
+      render(await r.json());
+    } catch (err) {
+      out.innerHTML = `<div class="answer">Could not reach the bot: ${escape(err.message)}</div>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

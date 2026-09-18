@@ -53,6 +53,14 @@ do update set display_name = excluded.display_name,
               updated_at = now()
 """
 
+# Normalised here rather than by the caller, so a mention written as a JID and
+# the same person seen in an export as a phone number are one person.
+MENTION_SQL = """
+insert into mentions (utterance_id, user_norm)
+values (%(utterance_id)s, normalize_handle(%(handle)s))
+on conflict (utterance_id, user_norm) do nothing
+"""
+
 SEEN_SQL = """
 insert into user_state (user_id, display_name, last_seen_at, updated_at)
 values (%s, %s, %s, now())
@@ -125,7 +133,29 @@ def store(pool, group_id: str, messages: list[dict]) -> dict:
                 [(m["author"], m.get("author_name"), m["said_at"]) for m in messages],
             )
 
-    return {"received": len(messages), "stored": stored}
+            # Who was named in what. Looked up rather than returned by the
+            # insert, so a message we already had still registers its
+            # mentions - a worker replaying history after a reconnect must
+            # not lose the fact that somebody was called on.
+            mentioned = 0
+            for m in messages:
+                if not m.get("mentions"):
+                    continue
+                cur.execute(
+                    """select id from utterances
+                       where source_id = %s and author = %s
+                         and said_at = %s and md5(content) = md5(%s)""",
+                    (source_id, readable_author(m["author"]), m["said_at"], m["content"]),
+                )
+                row = cur.fetchone()
+                if row:
+                    cur.executemany(
+                        MENTION_SQL,
+                        [{"utterance_id": row[0], "handle": h} for h in m["mentions"]],
+                    )
+                    mentioned += len(m["mentions"])
+
+    return {"received": len(messages), "stored": stored, "mentions": mentioned}
 
 
 PENDING_SQL = """

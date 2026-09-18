@@ -54,6 +54,73 @@ reconnect that replays history does no harm. It takes a list, so you can batch.
 for members who joined after the export was taken. Send it every time and the
 bot stops citing `+229…42`.
 
+## Voice notes
+
+The feature nobody else will have. A voice note is unsearchable and gone if
+you did not listen in the hour — send us the audio and it becomes an ordinary,
+citable message attributed to whoever recorded it.
+
+```js
+if (msg.message?.audioMessage) {
+  const buffer = await downloadMediaMessage(msg, "buffer", {});
+  await fetch("http://127.0.0.1:8000/voice", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      group_id: METI_GROUP_JID,
+      author: msg.key.participant,
+      author_name: msg.pushName,
+      said_at: Number(msg.messageTimestamp),
+      mime_type: msg.message.audioMessage.mimetype || "audio/ogg",
+      audio_base64: buffer.toString("base64"),
+    }),
+  });
+}
+```
+
+Takes a few seconds — do not make the group wait on it. `empty: true` means
+there were no intelligible words; nothing was stored and nothing needs saying.
+
+## Mention alerts
+
+The one place the bot comes to somebody instead of waiting. Poll every few
+minutes and send each alert as a **direct message** — never in the group.
+
+```js
+const { alerts } = await (await fetch(`http://127.0.0.1:8000/alerts/${GROUP}`)).json();
+
+for (const a of alerts) {
+  await sock.sendMessage(jidOf(a.to), { text:
+    `${a.from_author} asked you this in the group and it is still open:\n\n` +
+    `"${a.excerpt}"` });
+}
+
+// Only after they are actually sent, so nobody is told twice.
+await fetch("http://127.0.0.1:8000/alerts/sent", {
+  method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ ids: alerts.map(a => a.id) }),
+});
+```
+
+The API already filters hard: only people who have used the bot before, only
+after a 20 minute grace period, only if they have not spoken since, and never
+the same mention twice. You do not need to add rules — send what it gives you.
+
+For this to work at all, pass `mentions` on `/messages`:
+`mentions: msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []`.
+
+## Timeline
+
+```js
+GET /timeline/<group_id>
+→ { timeline, facts, empty }
+```
+
+`timeline` is monospace text — send it inside triple backticks and WhatsApp
+lays it out. The dates are extracted by the model but drawn in code, so
+nothing appears that was not in a message, and each line keeps its citation.
+`empty: true` means the group has fixed no dates worth showing.
+
 ## Answering a question
 
 ```js

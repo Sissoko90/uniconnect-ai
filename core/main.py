@@ -11,23 +11,29 @@ features land behind them.
   POST /feedback  was that answer useful
   POST /messages  every message the worker sees, so the bot stays current
   POST /voice     a voice note, transcribed and made searchable
+  GET  /alerts/.. who was named in the group and has not come back to it
   GET  /recap/... decisions and action items from a transcribed call
   GET  /digest/.. five lines on the last 24 hours
+  GET  /timeline/ the group's schedule, drawn from what it actually said
   GET  /metrics   usage, as JSON
   GET  /metrics/page  the same, as a page for the judges
+  GET  /          the web fallback page
   GET  /health    is this thing alive
 """
 
 import asyncio
 import os
+import pathlib
 from contextlib import asynccontextmanager
 
+import alerts
 import answer as answer_engine
 import catchup as catchup_engine
 import ingest
 import limits
 import metrics as metrics_engine
 import recap
+import timeline as timeline_engine
 import voice
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -162,6 +168,10 @@ class IncomingMessage(BaseModel):
     author_name: str | None = None    # pushName, when WhatsApp provides one
     permalink: str | None = None
     lang: str | None = None
+    # JIDs of anyone named in this message, from contextInfo.mentionedJid.
+    # This is what lets the bot tell somebody, privately, that the group is
+    # waiting on them.
+    mentions: list[str] = []
 
 
 class MessagesRequest(BaseModel):
@@ -188,6 +198,7 @@ def ingest_messages(req: MessagesRequest, background: BackgroundTasks) -> dict:
             "said_at": ingest.parse_time(m.said_at),
             "permalink": m.permalink,
             "lang": m.lang,
+            "mentions": m.mentions,
         }
         for m in req.messages
     ]
@@ -238,6 +249,34 @@ def ingest_voice(note: VoiceNote, background: BackgroundTasks) -> dict:
     if result.get("stored"):
         background.add_task(ingest.embed_pending, pool)
     return result
+
+
+# --------------------------------------------------------------------------
+# Mention alerts
+# --------------------------------------------------------------------------
+
+
+@app.get("/alerts/{group_id}")
+def pending_alerts(group_id: str, limit: int = 50) -> dict:
+    """Who has been named in the group and has not come back to it.
+
+    The worker polls this and sends each one as a direct message. Nothing is
+    posted in the group. Only people who have already used the bot appear
+    here - writing to somebody who never asked for anything is how a number
+    gets blocked - and only after a grace period, because somebody reading
+    the chat right now does not need to be told.
+    """
+    return {"alerts": alerts.pending(pool, group_id, limit)}
+
+
+class AlertsSent(BaseModel):
+    ids: list[str]
+
+
+@app.post("/alerts/sent")
+def alerts_sent(req: AlertsSent) -> dict:
+    """Confirm delivery, so nobody is told the same thing twice."""
+    return {"marked": alerts.mark_sent(pool, req.ids)}
 
 
 # --------------------------------------------------------------------------
@@ -354,6 +393,22 @@ def daily_digest(group_id: str, day: str | None = None, lang: str | None = None)
     return recap.daily_digest(pool, group_id, day, lang)
 
 
+@app.get("/timeline/{group_id}")
+def group_timeline(group_id: str) -> dict:
+    """The schedule, as monospace text the worker can send in the thread.
+
+    The model extracts dated facts and the message each came from; the
+    drawing is done in code. Nothing reaches the timeline that was not in a
+    message, and every line keeps its citation - which an image could not do.
+
+    `empty` true means the group has not fixed any dates worth showing.
+    """
+    result = timeline_engine.build(pool, group_id)
+    if "error" in result:
+        raise HTTPException(status_code=503, detail=result["error"])
+    return result
+
+
 # --------------------------------------------------------------------------
 # Metrics and health
 # --------------------------------------------------------------------------
@@ -367,6 +422,19 @@ def metrics() -> dict:
 @app.get("/metrics/page", response_class=HTMLResponse)
 def metrics_page() -> str:
     return metrics_engine.page(pool)
+
+
+@app.get("/", response_class=HTMLResponse)
+def home() -> str:
+    """The web fallback: the same bot, for anyone not on WhatsApp.
+
+    Served by the API rather than hosted separately. It is one file with no
+    build step, it deploys with everything else, and it calls the API on its
+    own origin - so there is no second deployment to keep in sync two days
+    before shipping. The file is plain HTML and can be moved to Vercel as is
+    if we ever want it there.
+    """
+    return (pathlib.Path(__file__).parent / "static" / "index.html").read_text()
 
 
 @app.get("/health")
