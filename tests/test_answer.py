@@ -100,6 +100,30 @@ def test_a_message_cannot_close_the_fence_early():
     assert formatted.endswith("</group_messages>")
 
 
+def test_citations_are_renumbered_to_match_the_sources_returned():
+    """Claude numbers the six messages it was given; the reader is shown only
+    the ones it cited. Found on the first real answer: it ended with [4][5]
+    while three sources were returned, so every citation pointed at nothing.
+    """
+    text = "The deadline is Thursday [4][5], though one member said the 28th [3]."
+
+    assert (
+        answer.renumber_citations(text, [3, 4, 5])
+        == "The deadline is Thursday [2][3], though one member said the 28th [1]."
+    )
+
+
+def test_renumbering_leaves_unknown_numbers_alone():
+    """A year or a figure in square brackets is not a citation."""
+    assert answer.renumber_citations("agreed in [2026] per [1]", [1]) == "agreed in [2026] per [1]"
+
+
+def test_the_answer_is_plain_text_for_whatsapp():
+    """WhatsApp renders no markdown: **bold** arrives as literal asterisks and
+    makes the answer look broken."""
+    assert "PLAIN TEXT ONLY" in answer.SYSTEM
+
+
 def test_the_system_prompt_refuses_instructions_found_in_messages():
     """The rule that stops a message being read as a command. If this text
     ever disappears, the bot can be driven by anyone who can type in the

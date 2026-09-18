@@ -60,9 +60,14 @@ not do that, and offer to answer about the topic instead.
 Cite every claim with the number of the message it comes from, like [2]. A \
 sentence carrying a fact with no number on it is a bug.
 
-Write for a phone screen: three sentences at most, no preamble, no markdown \
-headings, no bullet lists unless you are listing three or more things. Do not \
-greet the reader and do not describe what you are about to do.
+Write for a phone screen: three sentences at most, no preamble. Do not greet \
+the reader and do not describe what you are about to do.
+
+PLAIN TEXT ONLY. No markdown of any kind: no **bold**, no ## headings, no \
+backticks. This is sent to WhatsApp, which does not render markdown - \
+asterisks arrive on screen as asterisks and make the answer look broken. If \
+something must stand out, put it in its own short sentence. A list of three \
+or more things may use lines starting with "- ", nothing else.
 
 Reply in the language of the question. A question in French gets a French \
 answer, a question in English an English one, whatever language the messages \
@@ -386,8 +391,12 @@ def sources_of(pool, utterance_ids: list) -> list[dict]:
                    join sources s on s.id = u.source_id
                    left join people p
                      on p.group_id = s.group_id and p.handle_norm = u.author_norm
-                   where u.id = any(%s)""",
-                (utterance_ids,),
+                   where u.id = any(%(ids)s)
+                   -- In the order they were cited, not whatever order the
+                   -- table returns. The reused answer still says [1][2][3],
+                   -- and those numbers have to line up with this list.
+                   order by array_position(%(ids)s::uuid[], u.id)""",
+                {"ids": utterance_ids},
             )
             return cur.fetchall()
 
@@ -402,6 +411,22 @@ def _as_sources(hits: list[dict]) -> list[dict]:
         }
         for h in hits
     ]
+
+
+def renumber_citations(text: str, cited: list[int]) -> str:
+    """Make the numbers in the answer match the sources the reader receives.
+
+    Claude numbers the messages it was given, but we return only the ones it
+    actually used. Without this, an answer can end with [4][5] while the
+    reader is shown three sources numbered 1 to 3 - citations pointing at
+    nothing, which is worse than no citations at all because they look right.
+    """
+    mapping = {old: new for new, old in enumerate(cited, start=1)}
+    return re.sub(
+        r"\[(\d+)\]",
+        lambda m: f"[{mapping.get(int(m.group(1)), m.group(1))}]",
+        text,
+    )
 
 
 def _quote_best(question: str, hits: list[dict]) -> tuple[str, list[dict]]:
@@ -479,6 +504,8 @@ def answer_question(
         # Only return the messages Claude actually used. Citations the reader
         # cannot match to a sentence are noise.
         used = [hits[i - 1] for i in cited] if cited else hits[:1]
+        if cited:
+            text = renumber_citations(text, cited)
     else:
         text, used = _quote_best(question, hits)
 

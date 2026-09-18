@@ -12,6 +12,7 @@ Safe to interrupt and safe to re-run - it picks up where it stopped.
 import argparse
 import os
 import sys
+import time
 
 MODEL = os.environ.get("EMBEDDING_MODEL", "voyage-4-lite")
 DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
@@ -19,6 +20,13 @@ DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 # The API accepts up to 1000 texts per call. Smaller batches mean a failure
 # costs less and progress is visible on a long run.
 BATCH = 128
+
+# A Voyage account with no payment method is capped at 3 requests and 10,000
+# tokens per minute - and even a paid account has a ceiling. Rather than fail
+# the run, back off and try again: the whole point of this script is that it
+# can be left to finish.
+MAX_ATTEMPTS = 6
+BACKOFF_SECONDS = 25
 
 
 # Fully parameterised, including the optional group filter and the limit: no
@@ -40,11 +48,49 @@ def to_pgvector(vector: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vector) + "]"
 
 
+def embed_with_retry(voyage, texts: list[str]):
+    """One batch, retried through rate limits with a growing pause.
+
+    Only rate limits are retried. A bad key or a wrong dimension will fail
+    the same way however long we wait, and hiding that behind six attempts
+    would just waste six minutes before showing the real error.
+    """
+    import voyageai.error
+
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            return voyage.embed(
+                texts,
+                model=MODEL,
+                # These are the stored messages, not the question asked about
+                # them. Voyage embeds the two roles differently.
+                input_type="document",
+                # Pinned rather than left to the model default, so a change
+                # upstream cannot produce vectors the column rejects.
+                output_dimension=DIM,
+            )
+        except voyageai.error.RateLimitError:
+            if attempt == MAX_ATTEMPTS:
+                raise
+            pause = BACKOFF_SECONDS * attempt
+            print(f"  rate limited, waiting {pause}s (attempt {attempt})", flush=True)
+            time.sleep(pause)
+
+    raise RuntimeError("unreachable")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--group-id", default=None, help="only this group")
     ap.add_argument("--batch", type=int, default=BATCH)
     ap.add_argument("--limit", type=int, default=None, help="stop after N messages")
+    ap.add_argument(
+        "--sleep",
+        type=float,
+        default=0.0,
+        help="seconds between batches; use it to stay under a rate limit "
+        "instead of discovering it one failed request at a time",
+    )
     args = ap.parse_args()
 
     dsn = os.environ.get("DATABASE_URL")
@@ -76,14 +122,7 @@ def main() -> int:
             if not rows:
                 break
 
-            result = voyage.embed(
-                [content for _, content in rows],
-                model=MODEL,
-                # These are the stored messages, not the question asked about
-                # them. Voyage embeds the two roles differently.
-                input_type="document",
-                output_dimension=DIM,
-            )
+            result = embed_with_retry(voyage, [content for _, content in rows])
             tokens += result.total_tokens
 
             with conn.cursor() as cur:
@@ -104,6 +143,9 @@ def main() -> int:
 
             done += len(rows)
             print(f"  {done} embedded", flush=True)
+
+            if args.sleep:
+                time.sleep(args.sleep)
 
     print(f"Done: {done} messages, {tokens} tokens with {MODEL}")
     return 0
