@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only by default. A job that needs more asks for it explicitly.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the run still in flight. During a
+# hackathon nobody waits on a queue for a commit that is already obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Must match core/Dockerfile. A test passing on a version we do not
+          # deploy proves nothing.
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+          pip install -r core/requirements.txt -r ingestion/requirements.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Tests
+        run: pytest
+
+  schema:
+    name: Database schema
+    runs-on: ubuntu-latest
+    # The schema is applied once, on a fresh volume, and a syntax error there
+    # is only discovered when someone rebuilds the database - typically at the
+    # worst moment. This job applies it from scratch on every change.
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: uniconnect
+          POSTGRES_PASSWORD: ci_only
+          POSTGRES_DB: uniconnect
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uniconnect"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGPASSWORD: ci_only
+      PSQL: psql -h localhost -U uniconnect -d uniconnect -v ON_ERROR_STOP=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply the schema
+        run: $PSQL -f db/schema.sql
+
+      - name: Every table is there
+        run: |
+          for table in sources utterances answers people user_state; do
+            $PSQL -c "select 1 from $table limit 1" > /dev/null
+            echo "ok: $table"
+          done
+
+      - name: Vector search actually works
+        # Catches the failure that matters most: pgvector present but the
+        # index unusable, or a dimension that no longer matches the model.
+        run: |
+          $PSQL -c "insert into sources (kind, platform, group_id) values ('chat','whatsapp','ci')"
+          $PSQL -c "insert into utterances (source_id, author, content, said_at, embedding)
+                    select id, 'CI', 'hello world', now(), array_fill(0.01::real, array[1024])::vector
+                    from sources where group_id = 'ci'"
+          $PSQL -c "select author from utterances
+                    order by embedding <=> array_fill(0.01::real, array[1024])::vector limit 1"
+          $PSQL -c "select author from utterances
+                    where fts @@ websearch_to_tsquery('simple', 'hello')"
+
+      - name: Re-ingesting the same message does not duplicate it
+        run: |
+          $PSQL -c "insert into utterances (source_id, author, content, said_at)
+                    select id, 'CI', 'dup', '2026-09-18T10:00:00Z' from sources where group_id='ci'"
+          $PSQL -c "insert into utterances (source_id, author, content, said_at)
+                    select id, 'CI', 'dup', '2026-09-18T10:00:00Z' from sources where group_id='ci'
+                    on conflict do nothing"
+          test "$($PSQL -tAc "select count(*) from utterances where content='dup'")" = "1"
+
+  image:
+    name: API image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t uniconnect-api ./core
+
+      - name: It starts and reports itself unhealthy without a database
+        # A container that crashes on boot rather than reporting 503 is a
+        # container nobody can debug at 2am.
+        run: |
+          docker run -d --name api -e DATABASE_URL=postgresql://nobody@127.0.0.1:1/none \
+            -p 8000:8000 uniconnect-api
+          sleep 8
+          code=$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/health || true)
+          docker logs api
+          test "$code" = "503"
