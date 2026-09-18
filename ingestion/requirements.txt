@@ -1,0 +1,4 @@
+# See core/requirements.txt for why these are pinned exactly.
+psycopg[binary]==3.3.6
+voyageai==0.5.0
+requests==2.34.2
