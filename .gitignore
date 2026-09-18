@@ -2,7 +2,24 @@
 __pycache__/
 *.pyc
 .venv/
+node_modules/
+
+# --- The group's data. Never commit a conversation. -------------------------
+# The exports are members' private messages. They belong on the VPS and in
+# the database, not in a public repository.
+*.zip
+WhatsApp Chat with *
+exports/
 data/
+/data/*
+
+# --- Credentials ------------------------------------------------------------
+# Baileys writes the linked-session keys here. Anyone holding them can send
+# messages as the bot's phone number.
+auth_info*/
+*.session
+
+# --- Media and scratch ------------------------------------------------------
 *.mp3
 *.wav
 *.sqlite
