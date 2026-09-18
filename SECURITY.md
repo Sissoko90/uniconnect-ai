@@ -43,6 +43,11 @@ During the hackathon (18–24 September 2026) we aim to answer within a day.
 - **One member cannot spend the group's budget.** Twenty questions an hour
   each, a daily cap across everybody, and an identical repeat within thirty
   seconds answered from the database for nothing.
+- **The public surface is four paths.** `/`, `/ask`, `/metrics/page` and
+  `/health`. Everything else — the group's messages, voice notes, mention
+  alerts, catch-up, digests, recaps — requires a shared `WORKER_TOKEN` and is
+  refused without it. An unset token disables those endpoints rather than
+  opening them.
 - **A leaked key is rotated, not deleted.** Removing a secret in a later
   commit does not unpublish it. Revoke it in the provider's console first.
 
@@ -102,11 +107,6 @@ Stated plainly rather than left for someone to discover:
 - **The loop guard is only half in our hands.** The API answers an identical
   repeat for free, but a loop between two bots that varies its wording is
   stopped by the worker refusing to answer bots — not by us.
-- **The public surface is four paths.** `/`, `/ask`, `/metrics/page` and
-  `/health`. Everything else — the group's messages, voice notes, mention
-  alerts, catch-up, digests, recaps — requires a shared `WORKER_TOKEN` and is
-  refused without it. An unset token disables those endpoints rather than
-  opening them.
 - **No database backups.** If the VPS is lost, the history and the usage
   metrics go with it.
 - **No audit log.** We record every answer, but not who read what.
