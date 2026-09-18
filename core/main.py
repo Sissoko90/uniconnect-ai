@@ -10,6 +10,7 @@ features land behind them.
   POST /people    tell us someone's name, so citations stop printing numbers
   POST /feedback  was that answer useful
   POST /messages  every message the worker sees, so the bot stays current
+  POST /voice     a voice note, transcribed and made searchable
   GET  /recap/... decisions and action items from a transcribed call
   GET  /digest/.. five lines on the last 24 hours
   GET  /metrics   usage, as JSON
@@ -27,6 +28,7 @@ import ingest
 import limits
 import metrics as metrics_engine
 import recap
+import voice
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from psycopg_pool import ConnectionPool
@@ -199,6 +201,42 @@ def ingest_messages(req: MessagesRequest, background: BackgroundTasks) -> dict:
     if result["stored"]:
         background.add_task(ingest.embed_pending, pool)
 
+    return result
+
+
+class VoiceNote(BaseModel):
+    group_id: str
+    author: str
+    said_at: str | int | float
+    audio_base64: str
+    mime_type: str = "audio/ogg"     # what WhatsApp sends
+    author_name: str | None = None
+    permalink: str | None = None
+
+
+@app.post("/voice")
+def ingest_voice(note: VoiceNote, background: BackgroundTasks) -> dict:
+    """A voice note, transcribed and stored as an ordinary message.
+
+    The most invisible thing in a WhatsApp group: unsearchable, unskimmable,
+    and gone if you did not listen in the hour. Afterwards it is searched and
+    cited like any other message - and unlike a call transcript it is
+    attributed to the person who recorded it, because we know who that is.
+    """
+    result = voice.store_voice_note(
+        pool,
+        group_id=note.group_id,
+        author=note.author,
+        author_name=note.author_name,
+        said_at=ingest.parse_time(note.said_at),
+        audio_b64=note.audio_base64,
+        mime_type=note.mime_type,
+        permalink=note.permalink,
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    if result.get("stored"):
+        background.add_task(ingest.embed_pending, pool)
     return result
 
 
