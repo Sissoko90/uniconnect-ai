@@ -361,15 +361,24 @@ is git-ignored; keep it that way.
 ### Give it a face
 
 ```bash
-npm run avatar
+sudo systemctl stop uniconnect-bot        # if it is already running
+sudo -u uniconnect npm run avatar
+sudo systemctl start uniconnect-bot
 ```
 
 Sets the bot's WhatsApp profile picture to the project logo. Run it once,
 after pairing. It is what 153 people see next to every answer and at the top
 of the private chat, a default grey silhouette reads as an unfinished script.
 
+**Stop the worker first.** WhatsApp allows one connection per linked device,
+so a second process using the same `auth_info/` throws the first one off:
+`stream errored out, conflict: replaced`. Run this with the worker up and you
+knock the bot offline to set a picture, and the session can be invalidated
+outright, which costs a re-pairing. The same applies to `npm run groups` and
+to anything else in this directory.
+
 If it fails, set the picture by hand on the bot's phone using
-`assets/logo.png`. It is cosmetic; it does not block anything.
+`core/static/logo.png`. It is cosmetic; it does not block anything.
 
 ### Run it
 

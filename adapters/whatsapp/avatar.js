@@ -57,7 +57,12 @@ sock.ev.on('connection.update', async ({ connection, qr }) => {
     console.log('Check it on the bot phone: it can take a minute to appear.');
   } catch (error) {
     console.error('Could not set the profile picture:', error.message);
-    console.error('Set it by hand on the bot phone instead - assets/logo.png.');
+    console.error(
+      'If the worker is running, that is why: WhatsApp allows one connection ' +
+        'per linked device and the second one is thrown off. Stop it first ' +
+        '(systemctl stop uniconnect-bot), run this, then start it again.'
+    );
+    console.error('Or set it by hand on the bot phone, from core/static/logo.png.');
     process.exit(1);
   }
 
