@@ -408,17 +408,24 @@ def feedback(req: FeedbackRequest) -> dict:
     Keyed on the person rather than an answer id, because a thumbs-up on
     WhatsApp is a reaction to the message just above - there is no id for the
     worker to send back.
+
+    The rating also lands on the original when the answer was a reused one.
+    What the person is rating is the text, and the text belongs to the answer
+    it was copied from: that is the row duplicate detection will serve again,
+    so rating only the copy left a rejected answer in circulation.
     """
     with pool.connection() as conn:
         row = conn.execute(
-            """update answers set rating = %s
-               where id = (
-                 select id from answers
+            """with last as (
+                 select id, reused_from from answers
                  where asked_by = %s and group_id = %s
                  order by asked_at desc limit 1
                )
+               update answers set rating = %s
+               where id in (select id from last)
+                  or id in (select reused_from from last where reused_from is not null)
                returning id""",
-            (1 if req.helpful else -1, req.user, req.group_id),
+            (req.user, req.group_id, 1 if req.helpful else -1),
         ).fetchone()
 
     if row is None:

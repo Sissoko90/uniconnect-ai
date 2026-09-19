@@ -134,6 +134,21 @@ create table answers (
   -- that caused it by thirty days.
   degraded boolean not null default false,
 
+  -- Set when this row is a reused answer rather than a new one: the question
+  -- was recognised as one already asked, and the earlier answer was served.
+  --
+  -- The copy is recorded so that reused answers still count against the
+  -- hourly limit and still appear in the usage figures. It must not itself be
+  -- reusable, though. A copy is younger than the answer it came from, so a
+  -- popular question kept minting fresher and fresher copies of one answer and
+  -- the thirty-day age limit never applied to anything.
+  --
+  -- It also carries a rating back to where it belongs. Feedback rates the last
+  -- answer a person got, which for a reused answer is the copy, so without
+  -- this a thumbs-down marked a row nobody would ever be served again and left
+  -- the original in circulation.
+  reused_from uuid references answers(id) on delete set null,
+
   -- The question, embedded. Duplicate detection is a similarity search over
   -- this column. Added now rather than Tuesday because altering a populated
   -- table mid-hackathon is how we lose an evening.

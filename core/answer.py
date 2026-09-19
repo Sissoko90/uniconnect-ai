@@ -349,6 +349,7 @@ def record(
     private: bool = False,
     usage: dict | None = None,
     degraded: bool = False,
+    reused_from=None,
 ) -> None:
     """Best effort: a failure here must never cost the user their answer.
 
@@ -363,8 +364,8 @@ def record(
                 """insert into answers
                      (question, answer, cited_ids, asked_by, group_id,
                       question_embedding, asked_privately, input_tokens,
-                      output_tokens, degraded)
-                   values (%s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s)""",
+                      output_tokens, degraded, reused_from)
+                   values (%s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)""",
                 (
                     question,
                     answer,
@@ -376,6 +377,7 @@ def record(
                     (usage or {}).get("input_tokens"),
                     (usage or {}).get("output_tokens"),
                     degraded,
+                    reused_from,
                 ),
             )
     except Exception:  # noqa: BLE001 - metrics are not worth an outage
@@ -426,6 +428,10 @@ where a.group_id = %(group_id)s
   -- without this the outage's answers are served for thirty days, including
   -- long after the balance is back.
   and not a.degraded
+  -- Nor a row that is itself a reused answer. A copy is younger than what it
+  -- came from, so reusing copies kept minting fresher ones and the age limit
+  -- below never applied to anything.
+  and a.reused_from is null
   and a.asked_at > now() - make_interval(days => %(max_age)s)
   -- Only ever match a question of the same kind. A question asked in a
   -- direct message must never come back as "this was already answered" in
@@ -592,6 +598,7 @@ def answer_question(
         record(
             pool, question, dup["answer"], user, group_id,
             dup["cited_ids"], qvec, private,
+            reused_from=dup["id"],
         )
         return {
             "answer": dup["answer"],
