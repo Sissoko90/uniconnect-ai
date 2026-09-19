@@ -18,6 +18,8 @@
  * so the decision lives here, in one file.
  */
 
+import { readFileSync, writeFileSync } from 'node:fs';
+
 import makeWASocket, {
   DisconnectReason,
   downloadMediaMessage,
@@ -47,9 +49,13 @@ const IGNORED = new Set(
 // minutes is often enough to be useful and rare enough to be invisible.
 const ALERT_INTERVAL_MS = Number(process.env.ALERT_INTERVAL_MINUTES || 5) * 60_000;
 
-// The hour, in UTC, at which the daily digest goes out. 18:00 UTC is early
-// evening across the countries in this group.
-const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC || 18);
+// The hour, in UTC, at which the daily digest goes out.
+//
+// 07:00 UTC, because the group runs from UTC+0 to UTC+3: nobody gets it
+// before 7am their time (Mali, Senegal) and nobody after 10am (Uganda,
+// Kenya). Morning beats evening for this: people open WhatsApp, see what they
+// missed, and start the day with it.
+const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC || 7);
 
 // A number that answers in 200 milliseconds, every time, at four in the
 // morning, is a number Meta blocks. The pause costs nothing and it is the
@@ -378,7 +384,21 @@ async function deliverAlerts(sock) {
   console.log(`delivered ${delivered.length} mention alerts`);
 }
 
-let lastDigestDay = null;
+// The day the digest last went out, kept on disk rather than in memory.
+//
+// In memory it was a real bug: a restart anywhere inside the digest hour
+// reset it to null and the group got the digest twice. A duplicate post is
+// exactly the noise this whole product exists to avoid, and restarts during
+// that hour are not rare, systemd restarts this worker on any failure.
+const DIGEST_STATE = new URL('.digest-state', import.meta.url).pathname;
+
+function lastDigestDay() {
+  try {
+    return readFileSync(DIGEST_STATE, 'utf8').trim();
+  } catch {
+    return null; // never posted, or the file was removed
+  }
+}
 
 /** Five lines, once a day, in the group. Checked every ten minutes. */
 async function maybePostDigest(sock) {
@@ -386,8 +406,12 @@ async function maybePostDigest(sock) {
   const today = now.toISOString().slice(0, 10);
 
   if (now.getUTCHours() !== DIGEST_HOUR_UTC) return;
-  if (lastDigestDay === today) return;
-  lastDigestDay = today;
+  if (lastDigestDay() === today) return;
+
+  // Written before the post, not after. Sending twice is worse than missing
+  // one: if the send fails we lose a digest, if it half-succeeds and we retry
+  // the group gets two.
+  writeFileSync(DIGEST_STATE, today);
 
   const result = await api.digest(GROUP_JID, process.env.DIGEST_LANG || 'en');
 
@@ -399,7 +423,9 @@ async function maybePostDigest(sock) {
 
   await humanPause();
   await sock.sendMessage(GROUP_JID, {
-    text: `Today in the group:\n\n${result.digest}\n\nAsk me anything about it in private.`,
+    text:
+      `Here is what happened since yesterday:\n\n${result.digest}\n\n` +
+      'Ask me anything about it in private.',
   });
   console.log('digest posted');
 }

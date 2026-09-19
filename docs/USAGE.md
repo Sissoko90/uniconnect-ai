@@ -54,11 +54,23 @@ the answer, with their name on it.
 The bot answers the second person, then stays quiet on that topic for six
 hours. The answer is already on the screen just above.
 
-### Once a day
+### Every morning
 
-At 18:00 UTC it posts five lines on what happened, each one citing the message
-it came from. If the day was quiet, it posts nothing rather than announcing
-the silence.
+At 07:00 UTC it posts five lines on what happened since the day before, each
+one citing the message it came from. If the day was quiet, it posts nothing
+rather than announcing the silence.
+
+The hour is chosen for the spread of the group, which runs from UTC+0 to
+UTC+3: nobody gets it before 7am their time, nobody after 10am.
+
+| | |
+|---|---|
+| Mali, Senegal | 07:00 |
+| Benin, Nigeria | 08:00 |
+| Rwanda, Zimbabwe, South Africa | 09:00 |
+| Uganda, Kenya | 10:00 |
+
+Change it with `DIGEST_HOUR_UTC` in the worker's `.env`.
 
 ---
 

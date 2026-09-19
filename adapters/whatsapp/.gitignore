@@ -3,3 +3,4 @@ auth_info/
 auth_info_baileys/
 .env
 *.log
+.digest-state
