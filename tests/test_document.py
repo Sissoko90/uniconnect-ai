@@ -35,10 +35,15 @@ def test_a_heading_stays_with_what_it_introduces():
 
     problem = [c for c in chunks if "grown large" in c]
     assert len(problem) == 1
-    assert problem[0].startswith("The Problem")
+    assert "The Problem" in problem[0], "the heading names the section it sits in"
 
     timeline = [c for c in chunks if "18 September" in c]
     assert timeline[0].startswith("Timeline")
+
+    # The failure itself: a heading left dangling at the end of the section
+    # before the one it introduces.
+    for chunk in chunks:
+        assert not chunk.rstrip().endswith(("The Problem", "Timeline"))
 
 
 def test_a_chunk_can_be_quoted_whole():
@@ -69,11 +74,38 @@ def test_an_empty_document_yields_nothing():
     assert document.to_chunks("\n\n   \n") == []
 
 
+def test_a_title_above_a_heading_is_not_left_on_its_own():
+    """A document that opens with its own title and then a section title left
+    the title alone in a chunk answering nothing, detached from what it
+    names. Two headings in a row belong together."""
+    doc = "UniPods Video Demo Guide\n\nThe opportunity\n\nOn 20 September 2026, UniPods is hosting an event in New York.\n"
+
+    chunks = document.to_chunks(doc)
+
+    assert len(chunks) == 1
+    assert chunks[0].startswith("UniPods Video Demo Guide")
+    assert "20 September" in chunks[0]
+
+
+def test_a_numbered_step_is_not_a_heading():
+    """"1. Name your file: Country_SolutionName_YourName" is short and ends on
+    a word, so everything about it looked like a title. Treating it as one
+    orphaned the real heading above it."""
+    doc = "How to submit\n\n1. Name your file: Country_SolutionName_YourName\n\n2. Upload it to Google Drive.\n"
+
+    chunks = document.to_chunks(doc)
+
+    assert len(chunks) == 1
+    assert chunks[0].startswith("How to submit")
+
+
 @pytest.mark.parametrize(
     "line, heading",
     [
         ("The Problem", True),
         ("What to Submit", True),
+        ("1. Name your file: Country_SolutionName", False),
+        ("2) Upload it somewhere", False),
         ("- Teams of up to 5 people.", False),
         ("We are launching a hackathon to solve a real challenge.", False),
         # Long enough to be a sentence even without a full stop.

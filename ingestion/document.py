@@ -61,6 +61,12 @@ def is_heading(paragraph: str) -> bool:
         return False
     if paragraph[:1] in "-*•":
         return False
+    # "1. Name your file: Country_SolutionName_YourName" is a step, not a
+    # title. It is short and it ends on a word, so everything else about it
+    # looks like a heading, and treating it as one orphaned the real heading
+    # above it.
+    if re.match(r"^\d+[.)]\s", paragraph):
+        return False
     return not paragraph.rstrip().endswith((".", "!", "?", ":", ","))
 
 
@@ -99,17 +105,30 @@ def to_chunks(text: str) -> list[str]:
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
 
     chunks: list[str] = []
+    # Whether the chunk being built is still nothing but heading lines. A
+    # document that opens with its own title followed by a section title had
+    # the title left alone in a chunk of its own, which is a chunk that
+    # answers nothing and a title detached from what it names.
+    open_is_heading = False
+
     for paragraph in paragraphs:
         paragraph = re.sub(r"[ \t]+", " ", paragraph)
         heading = is_heading(paragraph)
+
         for piece in split_long(paragraph):
-            if not heading and chunks and (
-                len(chunks[-1]) < MIN_CHARS
-                or len(chunks[-1]) + len(piece) + 1 <= CHUNK_CHARS
+            if chunks and (
+                # A heading joins the chunk above only when that chunk is
+                # itself nothing but headings. Otherwise it starts a section
+                # and belongs at the top of one.
+                open_is_heading
+                or (not heading and len(chunks[-1]) < MIN_CHARS)
+                or (not heading and len(chunks[-1]) + len(piece) + 1 <= CHUNK_CHARS)
             ):
                 chunks[-1] += "\n" + piece
+                open_is_heading = open_is_heading and heading
             else:
                 chunks.append(piece)
+                open_is_heading = heading
 
     return [c for c in chunks if c.strip()]
 
