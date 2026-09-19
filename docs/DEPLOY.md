@@ -258,8 +258,12 @@ GROUP_JID=          # left empty for now, filled in below
 
 ### Pair the phone
 
+> If the service is already installed, **stop it first**:
+> `sudo systemctl stop uniconnect-bot`. It restarts every ten seconds, and two
+> Baileys processes sharing one `auth_info/` fight over the session.
+
 ```bash
-npm run groups
+sudo -u uniconnect npm run groups
 ```
 
 A QR code appears in the terminal. On the bot's phone: **WhatsApp → Settings →
@@ -275,6 +279,14 @@ Once linked, the command prints every group the number is in:
 
 Copy that line into `.env`. If no group is listed, the number has not been
 added to the group yet — do that first, then re-run.
+
+Without `GROUP_JID` the worker exits immediately and systemd restarts it in a
+loop; the log says `GROUP_JID is not set` on every attempt.
+
+**Use the same `--group-id` everywhere.** The value you gave the parser in
+step 6 and the group this worker reads must match. They are the key linking
+the history to the questions: different values mean every answer is "I could
+not find anything", with no error anywhere to explain why.
 
 The session lives in `adapters/whatsapp/auth_info/`. **Treat that directory
 like a password**: anyone who has it can send WhatsApp messages as the bot. It
