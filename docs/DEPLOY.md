@@ -324,7 +324,8 @@ Wants=network-online.target
 Type=simple
 User=uniconnect
 WorkingDirectory=/opt/uniconnect-ai/adapters/whatsapp
-ExecStart=/usr/bin/npm start
+ExecStart=/usr/bin/node --env-file=.env index.js
+Environment=NODE_ENV=production
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -338,6 +339,23 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now uniconnect-bot
 sudo systemctl status uniconnect-bot
 ```
+
+`node` directly, not `npm start`: npm forks node, so systemd watches the
+wrapper instead of the process that matters and signals do not travel cleanly
+through it. npm also wants a writable `HOME`, which a service account does not
+necessarily have — that shows up as a bare `status=1/FAILURE` with nothing
+useful in the log.
+
+The service runs as `uniconnect`, so that user must own the directory:
+
+```bash
+sudo adduser --system --group --home /opt/uniconnect-ai uniconnect
+sudo chown -R uniconnect:uniconnect /opt/uniconnect-ai/adapters/whatsapp
+```
+
+Without it the service fails with `status=217/USER`. Run the worker's own
+commands as that user too — `sudo -u uniconnect npm run avatar` — or you will
+put root-owned files back into a directory the service cannot read.
 
 Watch it:
 
