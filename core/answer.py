@@ -532,7 +532,10 @@ def _quote_best(question: str, hits: list[dict]) -> tuple[str, list[dict]]:
         if french
         else "\n\n(Quoting the closest message: I cannot write an answer right now.)"
     )
-    return f'{lead} {display_author(best["author"])} [1]: "{quote}"{tail}', [best]
+    # No [1]. A citation marker points into a numbered list, and here there
+    # is one source whose author is already named in the sentence. It was
+    # arriving in WhatsApp as a bracket pointing at nothing.
+    return f'{lead} {display_author(best["author"])} : "{quote}"{tail}', [best]
 
 
 def answer_question(
