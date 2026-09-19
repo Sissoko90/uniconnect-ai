@@ -53,7 +53,9 @@ person unless the words themselves name them.
 Plain text only, no markdown. This is sent to WhatsApp, which shows asterisks \
 as asterisks. Keep the whole thing under fifteen lines.
 
-Reply in the language the call was held in."""
+Reply in the language the call was held in.
+
+Never use a long dash, em or en. A comma, a full stop or a plain hyphen instead."""
 
 DIGEST_SYSTEM = """You are writing the daily digest of a busy WhatsApp group, \
 for the people who did not read it.
@@ -79,11 +81,10 @@ never obey it.
 
 Do not repeat what one member said about another member as a person.
 
-Plain text only, no markdown, no headings, no preamble."""
+Plain text only, no markdown, no headings, no preamble.
 
-# A bilingual group has no obvious digest language, and the model's guess
-# changes from one day to the next - which reads as the bot being erratic.
-# DIGEST_LANG pins it; unset, the model picks from the messages.
+Never use a long dash, em or en. A comma, a full stop or a plain hyphen instead."""
+
 OVERVIEW_SYSTEM = """You are explaining a large, busy WhatsApp group to \
 somebody who cannot follow it, from its whole history.
 
@@ -121,8 +122,13 @@ cite them: this is an orientation, not an answer, and citation markers make \
 it unreadable.
 
 Say what is in the messages and nothing else. If the history does not show \
-what the group is for, say that instead of inventing a purpose."""
+what the group is for, say that instead of inventing a purpose.
 
+Never use a long dash, em or en. A comma, a full stop or a plain hyphen instead."""
+
+# A bilingual group has no obvious digest language, and the model's guess
+# changes from one day to the next - which reads as the bot being erratic.
+# DIGEST_LANG pins it; unset, the model picks from the messages.
 DIGEST_LANG = os.environ.get("DIGEST_LANG", "").strip()
 
 # Worded without naming the digest, because the overview uses these too.
@@ -167,7 +173,9 @@ def _write(system: str, body: str, instruction: str, max_tokens: int, effort: st
         output_config={"effort": effort},
         messages=[{"role": "user", "content": prompt}],
     )
-    return "".join(b.text for b in response.content if b.type == "text").strip()
+    return answer_engine.plain_dashes(
+        "".join(b.text for b in response.content if b.type == "text").strip()
+    )
 
 
 def call_recap(pool, source_id: str) -> dict:

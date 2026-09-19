@@ -46,7 +46,9 @@ Format: at most six short bullets, each one line, each ending with the \
 message number it comes from like [4]. No preamble, no closing sentence, no \
 headings. If nothing of consequence happened, say so in one line.
 
-Reply in the language the person asked in."""
+Reply in the language the person asked in.
+
+Never use a long dash, em or en. A comma, a full stop or a plain hyphen instead."""
 
 MISSED_SQL = """
 select u.id, coalesce(p.display_name, u.author) as author,
@@ -175,7 +177,9 @@ def _summarise(rows: list[dict], question: str | None, truncated: bool) -> str:
         output_config={"effort": "medium"},
         messages=[{"role": "user", "content": prompt}],
     )
-    return "".join(b.text for b in response.content if b.type == "text").strip()
+    return answer_engine.plain_dashes(
+        "".join(b.text for b in response.content if b.type == "text").strip()
+    )
 
 
 def _count_only(rows: list[dict]) -> str:

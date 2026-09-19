@@ -70,6 +70,11 @@ asterisks arrive on screen as asterisks and make the answer look broken. If \
 something must stand out, put it in its own short sentence. A list of three \
 or more things may use lines starting with "- ", nothing else.
 
+Never use a long dash. No em dash, no en dash. Use a comma, a full stop or \
+a plain hyphen. The group reads a long dash as a sign that a machine wrote \
+the text without anybody looking at it, and there is another bot in this \
+group whose messages are full of them.
+
 Reply in the language of the question. A question in French gets a French \
 answer, a question in English an English one, whatever language the messages \
 themselves are in.
@@ -86,6 +91,21 @@ FRENCH_MARKERS = {
 }
 
 _anthropic = None
+
+
+def plain_dashes(text: str) -> str:
+    """Take the long dashes out of anything the model wrote.
+
+    The system prompts ask for this and a prompt is not a guarantee, which
+    matters here because the output goes to 153 people at once and a single
+    em dash is the tell the group already associates with the other bot in
+    it, whose messages are full of them.
+
+    Spaced, it was punctuation between clauses and a comma replaces it.
+    Unspaced it was a range, "18-24 September", and a hyphen is right.
+    """
+    text = re.sub(r"\s*[—–]\s+", ", ", text)
+    return re.sub(r"[—–]", "-", text)
 
 
 def detect_lang(text: str) -> str:
@@ -325,7 +345,9 @@ def generate(question: str, hits: list[dict]) -> tuple[str, list[int], dict]:
         messages=[{"role": "user", "content": prompt}],
     )
 
-    text = "".join(b.text for b in response.content if b.type == "text").strip()
+    text = plain_dashes(
+        "".join(b.text for b in response.content if b.type == "text").strip()
+    )
     cited = sorted({int(n) for n in re.findall(r"\[(\d+)\]", text) if 1 <= int(n) <= len(hits)})
     usage = {
         "input_tokens": response.usage.input_tokens,

@@ -230,3 +230,24 @@ def test_a_question_of_only_common_words_is_not_blocked():
     would make the fallback silent for a whole class of questions."""
     hits = [hit("anything at all")]
     assert answer._quote_best("what is it about?", hits) is not None
+
+
+def test_long_dashes_never_reach_the_group():
+    """The group reads a long dash as a machine having written the text with
+    nobody looking, and the other bot in the group produces them constantly.
+    The system prompts ask for this; a prompt is not a guarantee, and the
+    output goes to 153 people at once."""
+    spaced = answer.plain_dashes("La date limite est demain — ne tardez pas.")
+    assert "—" not in spaced
+    assert spaced == "La date limite est demain, ne tardez pas."
+
+    # Unspaced it was a range, and a comma there would be nonsense.
+    assert answer.plain_dashes("18–24 September") == "18-24 September"
+    assert answer.plain_dashes("Today's recap — Friday") == "Today's recap, Friday"
+
+
+def test_ordinary_text_is_left_alone():
+    """A hyphen is not a long dash and a sanitiser that rewrites correct text
+    is worse than the problem it solves."""
+    for text in ["meti-cohort-1", "check-in at 9", "- a bullet", "a - b"]:
+        assert answer.plain_dashes(text) == text
