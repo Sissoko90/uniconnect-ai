@@ -58,7 +58,18 @@ sudo usermod -aG docker "$USER"
 ```bash
 exit
 ssh uniconnect@your-server-ip
-docker ps        # should print an empty table, not a permission error
+docker ps                # an empty table, not a permission error
+docker compose version   # must say v2.x
+```
+
+Compose **v2**, with a space. The old `docker-compose` (with a hyphen) is the
+Python 1.x tool, unmaintained since 2023, and it crashes on images built by
+BuildKit with `KeyError: 'ContainerConfig'`. Every command in this guide uses
+the v2 form. If `docker compose version` is not found:
+
+```bash
+sudo apt-get install -y docker-compose-plugin
+sudo apt remove -y docker-compose   # so nobody reaches for it out of habit
 ```
 
 Install Node 22 for the WhatsApp worker, and git:
@@ -525,3 +536,4 @@ and write a migration instead.
 | Citations show `+229…42` | Nobody has told us that person's name yet; it fills in as people speak |
 | `Daily spend cap reached` | Raise `DAILY_SPEND_CAP_USD` in `.env` and restart the API |
 | Schema change had no effect | The volume already existed. See *Resetting* |
+| `KeyError: 'ContainerConfig'` | You ran `docker-compose` (hyphen, v1). Use `docker compose` (space, v2) |
