@@ -21,7 +21,7 @@
  *   number. Nothing has to render correctly for that to work.
  */
 
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 
 import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
@@ -49,36 +49,17 @@ if (PAIR_NUMBER && (PAIR_NUMBER.length < 8 || PAIR_NUMBER.length > 15)) {
   process.exit(1);
 }
 
-/** The number a completed session on disk belongs to, or null. */
-function sessionNumber() {
-  try {
-    const creds = JSON.parse(readFileSync(`${AUTH_DIR}/creds.json`, 'utf8'));
-    if (!creds.registered) return null; // never finished pairing
-    return String(creds.me?.id || '').split(/[:@]/)[0] || null;
-  } catch {
-    return null;
-  }
-}
-
-// Asking to pair a number means starting fresh with that number. What is on
-// disk is kept only if it is a finished session for the very same one.
+// Passing PAIR_NUMBER means "pair this number now", so anything already on
+// disk goes. Keeping a session that matched the number looked careful and was
+// the opposite: a pairing can register on the phone and still leave
+// credentials that match nothing, and those credentials name the right
+// number. The check meant to protect a working session protected the broken
+// one instead, and every run afterwards failed the same way.
 //
-// Half-finished credentials are worse than none: the next run finds them,
-// tries to log in instead of registering, is rejected, and the socket is dead
-// before the new pairing request can be sent. The error then names the number
-// you just typed while the cause is the one from last time, no longer visible
-// anywhere. That took three attempts to see, so it is done here rather than
-// left as a step to remember.
+// Running without PAIR_NUMBER is the way to use an existing session.
 if (PAIR_NUMBER && existsSync(AUTH_DIR)) {
-  const existing = sessionNumber();
-  if (existing !== PAIR_NUMBER) {
-    rmSync(AUTH_DIR, { recursive: true, force: true });
-    console.log(
-      existing
-        ? `\n  Cleared a session belonging to ${existing}.`
-        : '\n  Cleared a half-finished pairing attempt.'
-    );
-  }
+  rmSync(AUTH_DIR, { recursive: true, force: true });
+  console.log('\n  Starting a fresh pairing.');
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
