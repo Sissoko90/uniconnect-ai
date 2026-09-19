@@ -29,6 +29,20 @@ import * as api from './api.js';
 
 const GROUP_JID = process.env.GROUP_JID || '';
 
+// Other bots in the group, by JID, comma separated. Their messages are not
+// indexed and never trigger a reply.
+//
+// There is already one in the METI group that answers without being asked.
+// Two bots that answer each other run all night and the bill arrives in the
+// morning; and a bot's chatter in our history makes it a source we might one
+// day cite, which it should never be.
+const IGNORED = new Set(
+  (process.env.IGNORED_JIDS || '')
+    .split(',')
+    .map((j) => j.trim())
+    .filter(Boolean)
+);
+
 // How often to look for people who were named and have not come back. Five
 // minutes is often enough to be useful and rare enough to be invisible.
 const ALERT_INTERVAL_MS = Number(process.env.ALERT_INTERVAL_MINUTES || 5) * 60_000;
@@ -84,16 +98,29 @@ const matches = (text, phrases) => {
   return phrases.some((p) => lower.includes(p));
 };
 
+// Said once to each person, on their first answer ever. Everybody learns that
+// a thumb corrects the bot; nobody reads it fifty times. Putting it under
+// every answer would add a line of housekeeping to the one place we have
+// worked to keep quiet.
+const FIRST_TIME_HINT =
+  'React 👍 or 👎 to any answer. A 👎 retires it, so it stops being reused ' +
+  'when somebody asks the same thing.';
+
 /** Format an answer for a phone: the answer, then where it came from. */
 function withSources(result) {
   const source = result.sources?.[0];
-  if (!source) return result.answer;
+  let text = result.answer;
 
-  const when = new Date(source.said_at).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-  });
-  return `${result.answer}\n\n- ${source.author}, ${when}`;
+  if (source) {
+    const when = new Date(source.said_at).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+    });
+    text += `\n\n- ${source.author}, ${when}`;
+  }
+
+  if (result.meta?.first_answer) text += `\n\n${FIRST_TIME_HINT}`;
+  return text;
 }
 
 async function connectToWhatsApp() {
@@ -183,6 +210,8 @@ async function handle(sock, msg) {
   if (inGroup && GROUP_JID && chat !== GROUP_JID) return;
 
   const sender = senderOf(msg);
+  // Another bot. Not indexed, not answered, not cited.
+  if (IGNORED.has(sender)) return;
   const when = Number(msg.messageTimestamp);
 
   // A voice note: the most invisible thing in the group. Store it and say

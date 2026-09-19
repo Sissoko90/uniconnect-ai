@@ -174,6 +174,41 @@ that page.
 
 ---
 
+## How it keeps up with the group
+
+The bot is a member of the group, so it receives every message as you send it.
+Each one is stored and indexed within a few seconds. Ask about something said
+two minutes ago and it will find it.
+
+Nothing is sent anywhere outside the server. The messages go from WhatsApp to
+our own database on our own machine.
+
+**One real limit.** It only sees messages that arrive while it is connected.
+If the bot is down for an hour, that hour is missing from what it knows, and
+it will not know that it is missing. WhatsApp usually delivers what it queued
+once the bot reconnects, which covers a short outage, but do not rely on that
+for a long one.
+
+Two things fill a gap: export the chat again and re-run the parser, which is
+safe to do as often as you like because nothing is ever stored twice.
+
+Check how current it is at any moment:
+
+```bash
+curl -s localhost:8000/health
+```
+
+```json
+{"utterances": 1204, "latest_message": "2026-09-21T14:03:00Z",
+ "awaiting_embedding": 0}
+```
+
+`latest_message` is the newest thing it has read. If that is hours old while
+the group is busy, the worker has stopped feeding it: `systemctl status
+uniconnect-bot`. `awaiting_embedding` above zero for more than a minute or two
+means the embedding pass is behind, and those messages are findable by their
+exact words but not yet by meaning.
+
 ## What it will not do
 
 Worth knowing before you try, so it does not read as a bug.

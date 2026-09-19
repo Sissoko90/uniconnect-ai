@@ -58,6 +58,21 @@ def rate_limited(pool, user: str) -> bool:
     return questions_last_hour(pool, user) >= MAX_QUESTIONS_PER_HOUR
 
 
+def never_asked_before(pool, user: str) -> bool:
+    """First answer this person has ever received.
+
+    The worker uses it to explain, once, that a thumb on an answer corrects
+    it. Telling everybody on every answer would put a line of housekeeping
+    under each one, in the one place we have worked to keep quiet. Telling
+    each person once teaches the whole group and then gets out of the way.
+    """
+    with pool.connection() as conn:
+        row = conn.execute(
+            "select 1 from answers where asked_by = %s limit 1", (user,)
+        ).fetchone()
+    return row is None
+
+
 def recent_identical(pool, user: str, question: str) -> dict | None:
     """The same person, the same words, seconds ago.
 

@@ -520,6 +520,10 @@ def answer_question(
 ) -> dict:
     lang = detect_lang(question)
 
+    # Checked before anything is recorded, or the answer we are about to
+    # store would itself count as a previous one.
+    first_answer = limits.never_asked_before(pool, user)
+
     # Same person, same words, seconds ago: a double tap, a worker retry, or
     # the start of a loop between two bots. Answered from the table, so a loop
     # costs nothing however long it runs.
@@ -527,14 +531,14 @@ def answer_question(
         return {
             "answer": again["answer"],
             "sources": _as_sources(sources_of(pool, again["cited_ids"])),
-            "meta": {"duplicate": True, "repeat": True},
+            "meta": {"duplicate": True, "repeat": True, "first_answer": False},
         }
 
     if limits.rate_limited(pool, user):
         return {
             "answer": limits.TOO_MANY[lang],
             "sources": [],
-            "meta": {"duplicate": False, "rate_limited": True},
+            "meta": {"duplicate": False, "rate_limited": True, "first_answer": False},
         }
 
     # Embedded once, used three times: search, duplicate detection, storage.
@@ -553,6 +557,7 @@ def answer_question(
                 # Safe to echo: the match is scoped to questions of the same
                 # kind, so a public duplicate can only quote a public question.
                 "original_question": dup["question"],
+                "first_answer": first_answer,
             },
         }
 
@@ -568,7 +573,7 @@ def answer_question(
         return {
             "answer": NO_SOURCE[lang],
             "sources": [],
-            "meta": {"duplicate": False},
+            "meta": {"duplicate": False, "first_answer": first_answer},
         }
 
     usage = None
@@ -601,5 +606,5 @@ def answer_question(
         # degraded says the answer came from search alone. The worker can show
         # it or not; what matters is that it is never silently implied to be a
         # written answer.
-        "meta": {"duplicate": False, "degraded": degraded},
+        "meta": {"duplicate": False, "degraded": degraded, "first_answer": first_answer},
     }

@@ -466,6 +466,16 @@ def health():
         # person watching it, and to anything polling it.
         with pool.connection(timeout=2) as conn:
             n = conn.execute("select count(*) from utterances").fetchone()[0]
+            # How current the bot is, which is the question people actually
+            # have. A count says nothing: 829 messages could all be from last
+            # week. If the newest message is hours old while the group is
+            # talking, the worker has stopped feeding us.
+            latest = conn.execute(
+                "select max(said_at) from utterances"
+            ).fetchone()[0]
+            pending = conn.execute(
+                "select count(*) from utterances where embedding is null"
+            ).fetchone()[0]
     except Exception as exc:
         raise HTTPException(
             status_code=503, detail=f"database unreachable: {exc}"
@@ -474,6 +484,8 @@ def health():
     return {
         "status": "ok",
         "utterances": n,
+        "latest_message": latest.isoformat().replace("+00:00", "Z") if latest else None,
+        "awaiting_embedding": pending,
         # So a glance at /health says which half of the pipeline is degraded.
         "generation": answer_engine.generation_available(),
         "embeddings": answer_engine.embeddings.available(),
