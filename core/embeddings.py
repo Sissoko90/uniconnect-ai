@@ -14,6 +14,26 @@ DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
 
 _client = None
 
+# How often embedding has refused, and what it last said.
+#
+# The refusal is deliberately survivable: the bot falls back to full text
+# search and keeps answering. That is the right behaviour and it is also
+# completely silent, so a rate limit looks exactly like the bot getting worse
+# for no reason. On a free Voyage account the limit is three requests a
+# minute, which 153 people reach in seconds, so this is the difference
+# between knowing and guessing on the day the group votes.
+#
+# Reported by /health and on the metrics page. Counted since the process
+# started; a restart resets it, which is what you want after a fix.
+refusals = 0
+last_refusal: str | None = None
+
+
+def _refused(exc: Exception) -> None:
+    global refusals, last_refusal
+    refusals += 1
+    last_refusal = str(exc)[:200]
+
 
 def available() -> bool:
     """False means no key: callers fall back to full text search alone."""
@@ -57,6 +77,7 @@ def embed_query(text: str) -> list[float] | None:
         )
         return result.embeddings[0]
     except Exception as exc:  # noqa: BLE001 - any failure degrades, none kills
+        _refused(exc)
         print(f"embedding unavailable, falling back to full text search: {exc}", flush=True)
         return None
 
@@ -82,6 +103,7 @@ def embed_documents(texts: list[str]) -> list[list[float]] | None:
         )
         return result.embeddings
     except Exception as exc:  # noqa: BLE001 - the next pass picks them up
+        _refused(exc)
         print(f"document embedding failed, leaving rows for the next pass: {exc}", flush=True)
         return None
 

@@ -694,6 +694,13 @@ def health():
         # So a glance at /health says which half of the pipeline is degraded.
         "generation": answer_engine.generation_available(),
         "embeddings": answer_engine.embeddings.available(),
+        # A key that exists is not a key that works. Voyage refuses past three
+        # requests a minute on an account with no payment method, the bot
+        # falls back to full text search and keeps answering, and nothing
+        # anywhere says so: it just gets worse. With 153 people that is the
+        # normal state, so the count belongs where somebody will see it.
+        "embedding_refusals": answer_engine.embeddings.refusals,
+        "last_embedding_refusal": answer_engine.embeddings.last_refusal,
         # And what it has cost today, so nobody has to open a billing console
         # to find out why answers suddenly got blunter.
         "spend_today_usd": round(limits.spend_today_usd(pool), 4),

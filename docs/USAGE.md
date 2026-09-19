@@ -277,7 +277,7 @@ curl -s localhost:8000/health
 
 ```json
 {"utterances": 1204, "latest_message": "2026-09-21T14:03:00Z",
- "awaiting_embedding": 0}
+ "awaiting_embedding": 0, "embedding_refusals": 0}
 ```
 
 `latest_message` is the newest thing it has read. If that is hours old while
@@ -285,6 +285,14 @@ the group is busy, the worker has stopped feeding it: `systemctl status
 uniconnect-bot`. `awaiting_embedding` above zero for more than a minute or two
 means the embedding pass is behind, and those messages are findable by their
 exact words but not yet by meaning.
+
+`embedding_refusals` is the one to watch on a busy day. Anything above zero
+means questions are being answered by word matching alone, without the half
+of the search that understands meaning. The bot does not go quiet when this
+happens, it just gets worse, so nothing else would tell you.
+`last_embedding_refusal` says why. The usual cause is the rate limit on a
+Voyage account with no payment method: three requests a minute, which a
+group this size reaches in seconds.
 
 ## What it will not do
 
