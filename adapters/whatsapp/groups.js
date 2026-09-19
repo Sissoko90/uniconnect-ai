@@ -151,8 +151,17 @@ async function connect() {
         console.error('  Link a device, "Link with phone number instead" FIRST,');
         console.error('  then run this again and type the code straight away.\n');
       } else if (reason === 401) {
-        console.error('\n  WhatsApp rejected the session (401). Usually the wrong');
-        console.error('  number, most often one missing its country code.\n');
+        // The session on disk is dead, so there is nothing to protect by
+        // keeping it, and keeping it guarantees the next run fails the same
+        // way. This happens when a pairing registered on the phone but the
+        // socket closed before the handshake finished writing: the number is
+        // right, the credentials match nothing, and the strict check above
+        // keeps them precisely because the number matches.
+        rmSync(AUTH_DIR, { recursive: true, force: true });
+        console.error('\n  WhatsApp rejected the session (401), so it has been cleared.');
+        console.error('  On the bot phone, open WhatsApp, Settings, Linked devices');
+        console.error('  and remove any entry for this server, then run:\n');
+        console.error(`    PAIR_NUMBER=${PAIR_NUMBER || '<the bot number>'} npm run groups\n`);
       } else {
         console.error(`\n  Connection closed (${reason ?? 'unknown'}).\n`);
       }

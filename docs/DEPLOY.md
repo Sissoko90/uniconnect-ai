@@ -550,7 +550,7 @@ and write a migration instead.
 | `npm run groups` lists nothing | The number is not in the group yet |
 | QR code asked for again | `auth_info/` was deleted, or the device was unlinked from the phone |
 | The QR will not scan | Terminal too small, light background, or an expired code. Use `PAIR_NUMBER=...` instead |
-| Pairing closes with `401` | The number is wrong, usually missing its country code. `npm run groups` clears the failed attempt itself |
+| Pairing closes with `401` | The session is dead: wrong number, or a pairing that registered on the phone before the handshake finished. The script clears it; remove the entry in Linked devices on the phone, then pair again |
 | Pairing closes with `515` | Not a failure. WhatsApp asks for the socket to be reopened after a successful pairing, and the script reconnects by itself |
 | Pairing closes with `408` | The code expired. Be on the phone's entry screen before running the command |
 | Bot silent in the group | By design. It answers `@ask`, direct messages, and posts the daily digest |
