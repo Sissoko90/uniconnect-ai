@@ -115,7 +115,8 @@ Calling these from a bot: **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
 | | |
 |---|---|
-| [DEPLOY](docs/DEPLOY.md) | **from a bare server to a running bot, step by step** |
+| [USAGE](docs/USAGE.md) | **every feature, and what to type to get it** |
+| [DEPLOY](docs/DEPLOY.md) | from a bare server to a running bot, step by step |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | how it is built and why |
 | [SETUP](docs/SETUP.md) | running it on a laptop |
 | [INTEGRATION](docs/INTEGRATION.md) | wiring a WhatsApp worker to the API |

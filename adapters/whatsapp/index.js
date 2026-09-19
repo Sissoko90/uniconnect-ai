@@ -122,6 +122,20 @@ async function connectToWhatsApp() {
     }
   });
 
+  // A thumb on one of the bot's answers is the only feedback anybody will
+  // ever give it. Nobody types "that was wrong"; they react and move on.
+  // It also does real work: an answer marked unhelpful stops being reused as
+  // a duplicate, so one thumb down retires a bad answer for everybody.
+  sock.ev.on('messages.reaction', async (reactions) => {
+    for (const r of reactions) {
+      try {
+        await handleReaction(r);
+      } catch (error) {
+        console.error('reaction failed:', error.message);
+      }
+    }
+  });
+
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
     for (const msg of messages) {
@@ -134,6 +148,27 @@ async function connectToWhatsApp() {
       }
     }
   });
+}
+
+// Deliberately narrow. A 🤔 or a 😂 on an answer means something, but not
+// something we can turn into a rating, and guessing would poison the only
+// quality signal we have.
+const POSITIVE = new Set(['👍', '❤️', '🙏', '✅', '💯', '🔥']);
+const NEGATIVE = new Set(['👎', '❌', '🚫']);
+
+async function handleReaction(event) {
+  // Only reactions on messages the bot itself sent.
+  if (!event.key?.fromMe) return;
+
+  const emoji = event.reaction?.text || '';
+  const helpful = POSITIVE.has(emoji) ? true : NEGATIVE.has(emoji) ? false : null;
+  if (helpful === null) return; // removing a reaction sends an empty string
+
+  const user = event.reaction?.key?.participant || event.reaction?.key?.remoteJid;
+  if (!user) return;
+
+  await api.feedback(user, GROUP_JID, helpful);
+  console.log(`${emoji} from ${user}: rated ${helpful ? 'helpful' : 'unhelpful'}`);
 }
 
 async function handle(sock, msg) {

@@ -449,6 +449,8 @@ sudo systemctl status uniconnect-bot
 curl -s -o /dev/null -w "%{http_code}\n" localhost:8000/alerts/meti-cohort-1   # 401
 ```
 
+[USAGE.md](USAGE.md) is what to hand the group once this works.
+
 Then, in WhatsApp:
 
 - `@ask what is the deadline?` in the group → a sourced answer
