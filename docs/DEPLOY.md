@@ -363,6 +363,7 @@ server {
 
     # The four public paths, and nothing else.
     location = /             { include proxy_params; proxy_pass http://127.0.0.1:8000; }
+    location = /logo.png     { include proxy_params; proxy_pass http://127.0.0.1:8000; }
     location = /metrics/page { include proxy_params; proxy_pass http://127.0.0.1:8000; }
     location = /health       { include proxy_params; proxy_pass http://127.0.0.1:8000; }
 
