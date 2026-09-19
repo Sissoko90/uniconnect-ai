@@ -504,15 +504,35 @@ def renumber_citations(text: str, cited: list[int]) -> str:
     )
 
 
+# A quoted message has to fit on a phone screen. Some of the group's posts
+# are full programme announcements, and pasting one whole in answer to a
+# one-line question reads like a malfunction.
+QUOTE_CHARS = 400
+
+
 def _quote_best(question: str, hits: list[dict]) -> tuple[str, list[dict]]:
     """The answer when we are not calling a model: quote the best match.
 
-    Used with no API key and when the spend cap has been reached. Blunter
-    than a written answer, and still incapable of inventing anything.
+    Used with no API key, with no credit on the account, and past the daily
+    spend cap. Blunter than a written answer, still sourced, and still
+    incapable of inventing anything, which is why it is an acceptable place
+    to land rather than an error.
     """
     best = hits[0]
-    lead = "D'après" if detect_lang(question) == "fr" else "According to"
-    return f'{lead} {display_author(best["author"])} [1]: "{best["content"].strip()}"', [best]
+    quote = " ".join(best["content"].split())  # collapse the line breaks
+    if len(quote) > QUOTE_CHARS:
+        cut = quote.rfind(" ", 0, QUOTE_CHARS)
+        quote = quote[: cut if cut > 0 else QUOTE_CHARS].rstrip(" ,;:") + "..."
+
+    french = detect_lang(question) == "fr"
+    lead = "D'après" if french else "According to"
+    tail = (
+        "\n\n(Je cite le message le plus proche : je ne peux pas rédiger de "
+        "réponse en ce moment.)"
+        if french
+        else "\n\n(Quoting the closest message: I cannot write an answer right now.)"
+    )
+    return f'{lead} {display_author(best["author"])} [1]: "{quote}"{tail}', [best]
 
 
 def answer_question(
