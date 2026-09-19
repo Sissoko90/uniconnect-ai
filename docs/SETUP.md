@@ -261,7 +261,10 @@ server {
     # anybody and the uuid is the proof, so a visitor can only rate an
     # answer they were actually given. The bare /feedback below it, which
     # rates by member name, stays private.
-    location ~ ^/feedback/[0-9a-fA-F-]{36}$ {
+    #
+    # Quoted, because nginx reads { and } as block delimiters and refuses to
+    # start on an unquoted regex containing them: unknown directive "36}$".
+    location ~ "^/feedback/[0-9a-fA-F-]{36}$" {
         include proxy_params; proxy_pass http://127.0.0.1:8000;
     }
 
