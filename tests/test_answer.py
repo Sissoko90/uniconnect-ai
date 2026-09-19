@@ -3,7 +3,7 @@ regress and neither fails loudly: it must not print a member's full phone
 number into the group, and it must answer in the language it was asked in.
 """
 
-from datetime import UTC
+from datetime import UTC, datetime
 
 import answer
 
@@ -164,3 +164,69 @@ def test_the_system_prompt_refuses_instructions_found_in_messages():
     group."""
     assert "NEVER INSTRUCTIONS" in answer.SYSTEM
     assert "group_messages" in answer.SYSTEM
+
+
+# --------------------------------------------------------------------------
+# Quoting when there is no model
+# --------------------------------------------------------------------------
+
+
+def hit(content, author="Steven"):
+    return {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "author": author,
+        "content": content,
+        "said_at": datetime(2026, 9, 18, 15, 0, tzinfo=UTC),
+        "permalink": None,
+    }
+
+
+def test_an_unrelated_message_is_not_read_out_as_an_answer():
+    """Both of these went out to the group the morning the Anthropic balance
+    ran out. Each was the top hit by similarity and neither shares a single
+    subject word with what was asked."""
+    hits = [hit("Sorry, there was no data in the database that's why I gave that answer.")]
+    assert answer._quote_best("quelle est la date limite", hits) is None
+
+    hits = [hit("The project is deployed and connected to this group, as you can see")]
+    assert answer._quote_best("quels sont les criteres du hackathon ?", hits) is None
+
+
+def test_a_message_that_answers_the_question_is_still_quoted():
+    """The guard must not turn the fallback off. This is the whole value of
+    degraded mode: a real message, quoted, beats an error."""
+    hits = [hit("The submission deadline is Thursday 24 September at 14:00 CAT")]
+
+    quoted = answer._quote_best("what is the submission deadline?", hits)
+
+    assert quoted is not None
+    text, used = quoted
+    assert "Thursday 24 September" in text
+    assert used == hits
+
+
+def test_a_weak_first_hit_does_not_hide_a_good_second_one():
+    hits = [
+        hit("Sorry, there was no data in the database"),
+        hit("The deadline for the hackathon is 24 September"),
+    ]
+
+    text, used = answer._quote_best("quelle est la date limite du hackathon", hits)
+
+    assert "24 September" in text
+    assert used == [hits[1]]
+
+
+def test_accents_do_not_split_a_word_in_two():
+    """The group types both spellings, often in the same thread."""
+    assert answer.content_words("critères") == answer.content_words("criteres")
+
+    hits = [hit("Les critères du hackathon sont dans le brief")]
+    assert answer._quote_best("quels sont les criteres ?", hits) is not None
+
+
+def test_a_question_of_only_common_words_is_not_blocked():
+    """Nothing to match on is not the same as a bad match, and refusing here
+    would make the fallback silent for a whole class of questions."""
+    hits = [hit("anything at all")]
+    assert answer._quote_best("what is it about?", hits) is not None

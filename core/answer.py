@@ -13,6 +13,7 @@ Two rules hold everywhere:
 
 import os
 import re
+import unicodedata
 
 import embeddings
 import limits
@@ -524,15 +525,61 @@ def renumber_citations(text: str, cited: list[int]) -> str:
 QUOTE_CHARS = 400
 
 
-def _quote_best(question: str, hits: list[dict]) -> tuple[str, list[dict]]:
+def _strip_accents(word: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", word) if not unicodedata.combining(c)
+    )
+
+
+def content_words(text: str) -> set[str]:
+    """The words worth matching on: long enough, and not a stopword.
+
+    Accents are folded so that "criteres" and "critères" are the same word.
+    The group types both.
+    """
+    words = {_strip_accents(w) for w in re.findall(r"\w+", text.lower()) if len(w) > 2}
+    return {w for w in words if w not in STOPWORDS}
+
+
+def _worth_quoting(question: str, hit: dict) -> bool:
+    """Does this message share any subject word with the question?
+
+    A guard on the fallback only, never on a written answer. A model reads the
+    six messages it is given and works out which are relevant; quoting is not
+    reading, so a verbatim quote has to carry its own justification, and
+    "the vector search put it first" is not one when the whole corpus is a
+    poor match for the question.
+
+    Real answers from the morning the balance ran out, both of them the top
+    hit by similarity and neither sharing a single word with what was asked:
+      "quelle est la date limite" -> "Sorry, there was no data in the
+       database that's why I gave that answer."
+      "quels sont les criteres du hackathon" -> "The project is deployed and
+       connected to this group, as you can see..."
+    Saying nothing was found would have been true, and better.
+    """
+    asked = content_words(question)
+    if not asked:
+        return True  # nothing to check against, do not block on it
+    return bool(asked & content_words(hit["content"]))
+
+
+def _quote_best(question: str, hits: list[dict]) -> tuple[str, list[dict]] | None:
     """The answer when we are not calling a model: quote the best match.
 
     Used with no API key, with no credit on the account, and past the daily
     spend cap. Blunter than a written answer, still sourced, and still
     incapable of inventing anything, which is why it is an acceptable place
     to land rather than an error.
+
+    Returns None when nothing retrieved is worth quoting, so that the caller
+    says it found nothing rather than reading out an unrelated message.
     """
-    best = hits[0]
+    quotable = [h for h in hits if _worth_quoting(question, h)]
+    if not quotable:
+        return None
+
+    best = quotable[0]
     quote = " ".join(best["content"].split())  # collapse the line breaks
     if len(quote) > QUOTE_CHARS:
         cut = quote.rfind(" ", 0, QUOTE_CHARS)
@@ -645,14 +692,29 @@ def answer_question(
             # the messages; quoting the best one is a worse answer, not no
             # answer, and it is still sourced and still invents nothing.
             print(f"generation failed, quoting the best match instead: {exc}", flush=True)
-            text, used = _quote_best(question, hits)
+            quoted = _quote_best(question, hits)
             degraded = True
     else:
         # No key at all, or the daily cap is reached. Either way the answer
         # below is a quote and not a written answer, and saying otherwise in
         # the metadata is how a stopgap gets stored as the real thing.
-        text, used = _quote_best(question, hits)
+        quoted = _quote_best(question, hits)
         degraded = True
+
+    if degraded:
+        if quoted is None:
+            # Retrieval returned something, none of it worth reading out
+            # verbatim. Without a model to sort the relevant from the merely
+            # nearby, saying so is the honest answer and the one that keeps
+            # the promise never to invent.
+            record(pool, question, NO_SOURCE[lang], user, group_id, [], qvec, private,
+                   degraded=True)
+            return {
+                "answer": NO_SOURCE[lang],
+                "sources": [],
+                "meta": {"duplicate": False, "degraded": True, "first_answer": first_answer},
+            }
+        text, used = quoted
 
     record(
         pool,

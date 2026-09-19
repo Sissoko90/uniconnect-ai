@@ -287,7 +287,14 @@ route to a ban, and the fastest route to the group resenting it.
 | `duplicate` | already answered; `answered_at` and `original_question` say when and what | in the group, post once per topic and then stay quiet |
 | `repeat` | the same person asked the same words seconds ago | say nothing, it was a double tap or a retry |
 | `rate_limited` | this person has hit the hourly limit | send `answer` as-is, it is already a polite message in their language |
-| `degraded` | the daily spend cap was reached; the answer came from search alone | send it normally, it is still sourced, just blunter |
+| `degraded` | no model was called, so the answer came from search alone: no key, no credit on the account, or the daily spend cap was reached | send it normally, it is still sourced, just blunter |
+
+A degraded answer is a quote of a real message, so it is only sent when the
+message is actually about what was asked. With no model to sort the relevant
+from the merely nearby, the top hit by similarity is not enough on its own:
+"quelle est la date limite" once came back quoting "Sorry, there was no data
+in the database". When nothing retrieved shares a subject word with the
+question, `/ask` says it found nothing, with `degraded` still set.
 
 ## Failures
 
