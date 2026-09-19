@@ -83,3 +83,34 @@ def test_hello_is_answered_in_the_language_it_was_said_in():
     assert intent.greeting_language("salut tout le monde") == "fr"
     assert intent.greeting_language("Good morning") == "en"
     assert intent.greeting_language("hi there") == "en"
+
+
+def test_a_summary_of_the_group_is_a_summary_however_it_is_phrased():
+    """Sent to the bot in the group and answered with "je ne trouve rien dans
+    l'historique du groupe sur ce sujet", to a request to summarise the group
+    history.
+
+    The sentence contains " sur ", which marks a summary about a topic, so it
+    went to retrieval, which looked for messages on the subject of "the group"
+    and found none. Naming the group is not naming a topic.
+    """
+    assert intent.wants_a_summary(
+        "Fais moi un résumé complet de tous les discussions qui on eu lieu "
+        "sur le groupe de manière plus compréhensible claire et détaillé"
+    )
+    assert intent.wants_a_summary("résumé de la discussion")
+    assert intent.wants_a_summary("summary of everything on the group")
+    assert intent.wants_a_summary("recap sur tout ce qui s'est dit")
+
+
+def test_a_summary_about_a_topic_is_still_an_ordinary_question():
+    """The distinction has to survive the fix, or every question containing
+    the word "résumé" turns into a digest and stops citing anything."""
+    assert not intent.wants_a_summary("résumé sur le projet de Steven")
+    assert not intent.wants_a_summary("summary about the Wadhwani programme")
+    assert not intent.wants_a_summary("un récapitulatif concernant les visas")
+
+
+def test_surtout_is_not_the_word_tout():
+    """Substring matching would have made this a whole-group summary."""
+    assert not intent.wants_a_summary("résumé sur le projet, surtout la partie technique")

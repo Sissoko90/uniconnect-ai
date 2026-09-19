@@ -30,6 +30,22 @@ SUMMARY_PHRASES = (
 # retrieval answers it better than a digest would: it cites the messages.
 ABOUT_SOMETHING = (" about ", " on the ", " sur ", " de la ", " concernant ")
 
+# Except when the something is the group itself. "Fais moi un résumé complet
+# de toutes les discussions qui ont eu lieu sur le groupe" contains " sur "
+# and was read as a question about a topic, so it went to retrieval, which
+# looked for messages on the subject of "the group" and found none. The bot
+# answered "je ne trouve rien dans l'historique du groupe", to a request to
+# summarise the group history.
+#
+# Matched on whole words, because "surtout" contains "tout".
+WHOLE_GROUP = frozenset(
+    {
+        "group", "groupe", "discussion", "discussions", "conversation",
+        "conversations", "chat", "chats", "everything", "tout", "tous",
+        "toute", "toutes",
+    }
+)
+
 
 def strip_trigger(question: str) -> str:
     """Remove a leading @ask, leaving the question itself."""
@@ -42,6 +58,10 @@ def wants_a_summary(question: str) -> bool:
     lowered = question.lower()
     if not any(phrase in lowered for phrase in SUMMARY_PHRASES):
         return False
+    # Naming the group, the discussion or everything is still asking for the
+    # whole picture, however the sentence is built around it.
+    if set(re.findall(r"[\w']+", lowered)) & WHOLE_GROUP:
+        return True
     return not any(marker in lowered for marker in ABOUT_SOMETHING)
 
 
