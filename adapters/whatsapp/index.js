@@ -195,6 +195,7 @@ async function connectToWhatsApp() {
       else console.error('Logged out. Delete auth_info/ and scan the QR again.');
     } else if (connection === 'open') {
       console.log('WhatsApp bot is online.');
+      checkGroupJid(sock).catch((e) => console.error('group check failed:', e.message));
       startBackgroundJobs(sock);
     }
   });
@@ -418,6 +419,40 @@ async function reply(sock, msg, text) {
 // --------------------------------------------------------------------------
 // The two things the bot does without being asked
 // --------------------------------------------------------------------------
+
+/**
+ * Say at startup whether GROUP_JID is a group we are actually in.
+ *
+ * A wrong GROUP_JID is invisible in every other way. The bot connects, it
+ * answers private messages perfectly, nothing errors, and every message the
+ * group writes is discarded at the top of the handler. The only symptom is a
+ * history that stops growing, which looks exactly like a quiet group.
+ *
+ * Diagnosing it used to need somebody to post a message and watch the log.
+ * This asks WhatsApp directly, on the socket we already have, so it needs no
+ * traffic and starts no second session.
+ */
+async function checkGroupJid(sock) {
+  const groups = Object.values(await sock.groupFetchAllParticipating());
+
+  if (!GROUP_JID) {
+    console.warn('GROUP_JID is not set. Groups this number is in:');
+    groups.forEach((g) => console.warn(`  ${g.id}  ${g.subject}`));
+    return;
+  }
+
+  const match = groups.find((g) => g.id === GROUP_JID);
+  if (match) {
+    console.log(`reading group "${match.subject}" (${groups.length} groups joined)`);
+    return;
+  }
+
+  console.error(
+    `GROUP_JID ${GROUP_JID} is not a group this number belongs to. ` +
+      'Everything the group says is being discarded. Set one of these in .env:'
+  );
+  groups.forEach((g) => console.error(`  ${g.id}  ${g.subject}`));
+}
 
 function startBackgroundJobs(sock) {
   if (startBackgroundJobs.started) return; // survive a reconnect
