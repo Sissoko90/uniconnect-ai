@@ -16,6 +16,7 @@ that keeps the group quiet lives in one place.
 
 import os
 
+import answer as answer_engine
 from psycopg.rows import dict_row
 
 # Questions asked before somebody is worth surveying.
@@ -25,7 +26,12 @@ from psycopg.rows import dict_row
 SURVEY_AFTER = int(os.environ.get("SURVEY_AFTER_QUESTIONS", "5"))
 
 DUE_SQL = """
-select a.asked_by, count(*) as questions
+select a.asked_by, count(*) as questions,
+       -- Their questions, run together, so the language can be read off
+       -- them. Five questions is a far better sample than any one of them:
+       -- a two-word question carries almost no signal, and the marker
+       -- counting in detect_lang scales with the text it is given.
+       string_agg(a.question, ' ') as asked_in
 from answers a
 where a.group_id = %(group_id)s
   and a.asked_by is not null
@@ -55,7 +61,18 @@ def due(pool, group_id: str, limit: int = 5) -> list[dict]:
                 DUE_SQL,
                 {"group_id": group_id, "threshold": SURVEY_AFTER, "limit": limit},
             )
-            return cur.fetchall()
+            rows = cur.fetchall()
+
+    # The language they ask in, not a setting on the server. Writing to a
+    # French speaker in English to ask whether they like the bot answers its
+    # own question, and the same mistake in the summaries this morning sent
+    # somebody three hundred words of English they had not asked for.
+    #
+    # The text itself is not returned: the worker needs the verdict, not
+    # five of somebody's questions.
+    for row in rows:
+        row["lang"] = answer_engine.detect_lang(row.pop("asked_in") or "")
+    return rows
 
 
 def mark_asked(pool, group_id: str, user: str, message_id: str | None) -> None:

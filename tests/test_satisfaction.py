@@ -53,6 +53,39 @@ class FakePool:
         return False
 
 
+def test_the_survey_follows_the_language_they_ask_in():
+    """Writing to a French speaker in English to ask whether they like the
+    bot answers its own question. The five questions they have already asked
+    are a far better sample than any single message: a two-word question
+    carries almost no signal."""
+    pool = FakePool(
+        row={
+            "asked_by": "22370000000@s.whatsapp.net",
+            "questions": 6,
+            "asked_in": "quelle est la date limite ? qui contacter pour Wadhwani ?",
+        }
+    )
+
+    person = satisfaction.due(pool, "meti-cohort-1")[0]
+
+    assert person["lang"] == "fr"
+    # The questions themselves are not handed to the worker, which needs the
+    # verdict and not five of somebody's private questions.
+    assert "asked_in" not in person
+
+
+def test_english_askers_are_asked_in_english():
+    pool = FakePool(
+        row={
+            "asked_by": "250780000000@s.whatsapp.net",
+            "questions": 5,
+            "asked_in": "what is the deadline? who do I contact about the course?",
+        }
+    )
+
+    assert satisfaction.due(pool, "meti-cohort-1")[0]["lang"] == "en"
+
+
 def test_a_thumb_on_a_survey_is_recognised():
     pool = FakePool(row=("some-uuid",))
 

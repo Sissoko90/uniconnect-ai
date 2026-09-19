@@ -254,8 +254,9 @@ else: no form, no follow-up, and it never asks you again whatever you answer.
 
 It waits for five questions because before that you have no opinion worth
 giving, and it writes in private because a survey in the group would be the
-noise this whole bot exists to remove. The result is on the metrics page as
-a share of the people who answered.
+noise this whole bot exists to remove. It asks in the language you ask your
+questions in, worked out from those five. The result is on the metrics page
+as a share of the people who answered.
 
 ---
 

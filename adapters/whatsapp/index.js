@@ -606,8 +606,11 @@ async function askHowItIsGoing(sock) {
       : `${person.asked_by}@s.whatsapp.net`;
     try {
       await humanPause();
+      // In the language they ask their questions in. The API works it out
+      // from the five questions they have already asked, which is a far
+      // better sample than any single message.
       const sent = await sock.sendMessage(jid, {
-        text: SURVEY[process.env.SURVEY_LANG === 'fr' ? 'fr' : 'en'],
+        text: SURVEY[person.lang === 'fr' ? 'fr' : 'en'],
       });
       await api.surveySent(GROUP_ID, person.asked_by, sent?.key?.id || null);
       console.log(`asked ${jid} what they think (${person.questions} questions)`);
