@@ -6,6 +6,7 @@ number into the group, and it must answer in the language it was asked in.
 from datetime import UTC, datetime
 
 import answer
+import pytest
 
 
 def test_unknown_numbers_are_masked():
@@ -364,3 +365,26 @@ def test_context_can_be_turned_off(monkeypatch):
     pool = FakePool([])
     assert answer.with_context(pool, hits) == hits
     assert pool.executed == [], "the database is not touched when it is off"
+
+
+@pytest.mark.parametrize(
+    "question, lang",
+    [
+        # The one that sent three hundred words of English to a French
+        # speaker: no French function word in it at all, only an accent.
+        ("résumé complet", "fr"),
+        ("tu pourrais me donner le résumé complet et les liens du meet", "fr"),
+        ("quelle est la date limite", "fr"),
+        ("les liens des reunions", "fr"),
+        ("bonjour", "fr"),
+        ("summary", "en"),
+        ("what is the deadline", "en"),
+        ("give me a full summary of the group", "en"),
+        ("who do I contact about Wadhwani", "en"),
+        ("hello", "en"),
+        # Nothing to go on: English, which is what the programme writes in.
+        ("timeline", "en"),
+    ],
+)
+def test_the_language_of_the_question(question, lang):
+    assert answer.detect_lang(question) == lang

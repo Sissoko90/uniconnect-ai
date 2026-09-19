@@ -64,6 +64,12 @@ chat message disagree about a rule, a date or a deadline, prefer the \
 document and say so if it matters. kind="call transcript" is what was said \
 on a call, and it has no speaker labels.
 
+When the answer is or contains a link - a meeting, a call recording, a form, \
+a platform, a support address - give it in full, exactly as it was written. \
+Never shorten it, never describe it, never say "the link shared earlier". \
+Finding a link somebody posted four hundred messages ago is one of the main \
+things people ask this bot for, and a described link answers nothing.
+
 Cite every claim with the number of the message it comes from, like [2]. A \
 sentence carrying a fact with no number on it is a bug.
 
@@ -88,13 +94,47 @@ themselves are in.
 If the messages only partly answer, say what is known and name what is \
 missing, in one short sentence."""
 
-# Cheap and good enough to pick a language for the fallback one-liner. Claude
-# handles the real case itself.
+# Which language to answer in.
+#
+# This decides more than the fallback one-liner: the digest and the overview
+# are written in whatever this returns, so getting it wrong sends a French
+# speaker three hundred words of English.
+#
+# The first version looked for a handful of French function words and nothing
+# else, so any short request without one of them was called English. "Résumé
+# complet" has no function word at all and was answered in English, which is
+# the single most irritating thing this bot can do to half the group.
+#
+# Counting both languages fixes the short cases, and an accent is worth
+# something on its own: English almost never carries one, and the one word in
+# "résumé complet" that has an accent settles it.
 FRENCH_MARKERS = {
-    "qui", "quoi", "quand", "où", "pourquoi", "comment", "quel", "quelle",
-    "est-ce", "c'est", "que", "des", "les", "une", "pour", "avec", "dans",
-    "je", "nous", "vous", "combien", "quels", "quelles", "sur",
+    "qui", "quoi", "quand", "où", "ou", "pourquoi", "comment", "quel",
+    "quelle", "quels", "quelles", "est-ce", "c'est", "que", "qu", "des",
+    "les", "le", "la", "un", "une", "du", "au", "aux", "pour", "avec",
+    "dans", "sur", "sous", "je", "tu", "il", "elle", "nous", "vous", "ils",
+    "combien", "est", "sont", "etre", "avoir", "fais", "faire", "donne",
+    "donner", "peux", "peut", "pourrais", "veux", "voudrais", "merci",
+    "bonjour", "bonsoir", "salut", "resume", "complet", "date", "limite",
+    "reunion", "lien", "liens", "prochain", "prochaine", "aujourd'hui",
+    "demain", "hier", "moi", "toi", "mon", "ma", "mes", "ce", "cette",
+    "ces", "pas", "plus", "aussi", "alors", "quelque", "quelques",
 }
+
+ENGLISH_MARKERS = {
+    "what", "when", "where", "who", "why", "how", "which", "the", "and",
+    "is", "are", "was", "were", "do", "does", "did", "can", "could",
+    "would", "should", "have", "has", "had", "this", "that", "these",
+    "those", "give", "me", "my", "your", "our", "you", "we", "they",
+    "please", "thanks", "thank", "hello", "hi", "summary", "deadline",
+    "link", "links", "meeting", "recording", "next", "today", "tomorrow",
+    "yesterday", "about", "from", "with", "for", "all", "everything",
+}
+
+# An accent is rare in English and common in French. Worth more than one
+# ordinary word, which is what lets "résumé" alone decide a two-word request.
+ACCENTED = re.compile(r"[àâäçéèêëîïôöùûüÿœ]", re.IGNORECASE)
+ACCENT_WEIGHT = 2
 
 _anthropic = None
 
@@ -115,8 +155,20 @@ def plain_dashes(text: str) -> str:
 
 
 def detect_lang(text: str) -> str:
-    words = {w.strip("?!.,;:").lower() for w in text.split()}
-    return "fr" if words & FRENCH_MARKERS else "en"
+    """"fr" or "en", from the words used and the accents in them.
+
+    English is the default when there is nothing to go on, because that is
+    what the programme's own announcements are written in.
+    """
+    words = {w.strip("?!.,;:\u2019'\"") for w in text.lower().split()}
+    words |= set(re.findall(r"[\w']+", text.lower()))
+
+    french = len(words & FRENCH_MARKERS)
+    english = len(words & ENGLISH_MARKERS)
+    if ACCENTED.search(text):
+        french += ACCENT_WEIGHT
+
+    return "fr" if french > english else "en"
 
 
 def anthropic_client():

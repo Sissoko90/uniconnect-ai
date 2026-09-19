@@ -190,7 +190,15 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                 # this person: a digest shows them one day out of months,
                 # and a catch-up shows them nothing once their bookmark is
                 # current. It needs no identity, so it works everywhere.
-                whole = recap.overview(pool, req.group_id, lang=None, question=question)
+                # The asker's language, not DIGEST_LANG. That variable
+                # pins the daily digest posted to the whole group, where
+                # there is no one asker to follow; here there is, and
+                # letting it win answered a French request in English.
+                whole = recap.overview(
+                    pool, req.group_id,
+                    lang=answer_engine.detect_lang(question),
+                    question=question,
+                )
                 text, covering, count = (
                     whole.get("overview"), whole.get("covering"),
                     whole.get("message_count"),
@@ -219,7 +227,9 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                 # bookmark, so serving it to an unauthenticated caller
                 # naming somebody else would hand over their briefing and
                 # silently lose them everything they had not read.
-                digest = recap.daily_digest(pool, req.group_id, lang=None)
+                digest = recap.daily_digest(
+                    pool, req.group_id, lang=answer_engine.detect_lang(question)
+                )
                 text, covering, count = (
                     digest.get("digest"), digest.get("since"), digest.get("message_count")
                 )
