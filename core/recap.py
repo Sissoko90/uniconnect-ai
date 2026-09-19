@@ -10,6 +10,7 @@ group quiet has to live in one place.
 """
 
 import os
+import re
 from datetime import UTC, datetime, timedelta
 
 import answer as answer_engine
@@ -294,7 +295,7 @@ def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None =
 
 OVERVIEW_SQL = """
 select u.id, coalesce(p.display_name, u.author) as author, u.said_at, s.kind,
-       left(u.content, %(chars)s) as content
+       u.content
 from utterances u
 join sources s on s.id = u.source_id
 left join people p on p.group_id = s.group_id and p.handle_norm = u.author_norm
@@ -305,6 +306,32 @@ where s.group_id = %(group_id)s
 order by u.said_at desc
 limit %(limit)s
 """
+
+
+URL = re.compile(r"https?://\S+")
+
+
+def shorten_keeping_links(content: str) -> str:
+    """Trim a long message for the overview without losing its links.
+
+    Nine hundred messages have to fit in one prompt, so the long ones are cut.
+    Cutting them blindly threw away exactly what people ask this bot for: a
+    Teams meeting link runs past two hundred characters and sits at the end of
+    the message announcing the session, so it was always the part that went.
+
+    Anything cut off is dropped except the links in it, which are put back.
+    """
+    if len(content) <= OVERVIEW_CHARS_PER_MESSAGE:
+        return content
+
+    head = content[:OVERVIEW_CHARS_PER_MESSAGE]
+    # Found in the whole message, not in the two halves: a link straddling
+    # the cut is truncated in one and complete in the other, and the
+    # truncated half is worse than useless.
+    lost = [link for link in URL.findall(content) if link not in head]
+    if not lost:
+        return head + "..."
+    return head + "... " + " ".join(lost)
 
 
 def overview(pool, group_id: str, lang: str | None = None, question: str | None = None) -> dict:
@@ -325,15 +352,13 @@ def overview(pool, group_id: str, lang: str | None = None, question: str | None 
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 OVERVIEW_SQL,
-                {
-                    "group_id": group_id,
-                    "limit": OVERVIEW_MAX_MESSAGES,
-                    "chars": OVERVIEW_CHARS_PER_MESSAGE,
-                },
+                {"group_id": group_id, "limit": OVERVIEW_MAX_MESSAGES},
             )
             rows = cur.fetchall()
 
     rows.reverse()  # oldest first again: the story reads forwards
+    for row in rows:
+        row["content"] = shorten_keeping_links(row["content"])
 
     result = {"message_count": len(rows)}
     if rows:
