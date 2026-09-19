@@ -135,10 +135,15 @@ const FIRST_TIME_HINT =
   'React 👍 or 👎 to any answer. A 👎 retires it, so it stops being reused ' +
   'when somebody asks the same thing.';
 
-/** Format an answer for a phone: the answer, then where it came from. */
+/** Format an answer for a phone: the answer, then where it came from.
+ *
+ * The [1] markers are stripped. They are meaningful on the web page, which
+ * prints a numbered list of every source, and they are noise in WhatsApp,
+ * where one attribution line sits under the answer and nothing is numbered.
+ */
 function withSources(result) {
   const source = result.sources?.[0];
-  let text = result.answer;
+  let text = (result.answer || '').replace(/\s*\[\d+\]/g, '');
 
   if (source) {
     const when = new Date(source.said_at).toLocaleDateString('en-GB', {
@@ -254,7 +259,13 @@ async function handle(sock, msg) {
   if (!text) return;
 
   if (inGroup) {
-    await ingestText(msg, text, sender, when);
+    // A message addressed to the bot is a command, not something the group
+    // said. Indexing it made the bot quote questions back as answers:
+    // "According to Steven: @ask bonjour". It also let one person's question
+    // become the source for the next person's.
+    if (!text.toLowerCase().startsWith('@ask')) {
+      await ingestText(msg, text, sender, when);
+    }
     await handleGroup(sock, msg, text, sender);
   } else {
     await handlePrivate(sock, msg, text, sender);

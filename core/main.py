@@ -146,6 +146,16 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
     # strips it; the web page has nothing to mention, so it does not.
     question = intent.strip_trigger(req.question)
 
+    # Somebody saying hello. Answering it by quoting a message that happens to
+    # contain "bonjour" is the worst thing this bot does: it looks like it
+    # understood, and it looks stupid. Costs nothing, calls nothing.
+    if intent.is_greeting(question):
+        return AskResponse(
+            answer=intent.HELLO_BACK[intent.greeting_language(question)],
+            sources=[],
+            meta={"duplicate": False, "greeting": True},
+        )
+
     personal = req.private and trusted
 
     if trusted and intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
