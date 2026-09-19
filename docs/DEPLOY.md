@@ -283,6 +283,21 @@ in the database, a name you chose on the command line before any of this.
 sudo -u uniconnect PAIR_NUMBER=<the bot's own number> npm run groups
 ```
 
+**`sudo -u uniconnect` is not decoration.** Pairing writes the session into
+`auth_info/`, and whoever runs the command owns those files. Pair as root and
+the service, which runs as `uniconnect`, cannot write them: it exits with
+`EACCES: permission denied, open 'auth_info/creds.json'` and systemd restarts
+it every ten seconds forever. The pairing itself will have worked, which is
+what makes it confusing.
+
+If it has already happened, the session is fine and only the ownership is
+wrong:
+
+```bash
+sudo chown -R uniconnect:uniconnect adapters/whatsapp/auth_info
+sudo systemctl restart uniconnect-bot
+```
+
 `PAIR_NUMBER` is the bot's own number, digits only, country code included, no
 plus sign. The command prints eight characters. On the bot's phone: **WhatsApp,
 Settings, Linked devices, Link a device**, then **"Link with phone number
