@@ -79,6 +79,14 @@ const TIMELINE_PHRASES = [
 const answeredAloud = new Map();
 const TOPIC_TTL_MS = 6 * 60 * 60 * 1000;
 
+// Groups we have already said we are ignoring. One line each, not one per
+// message: the bot may legitimately sit in other groups and we are not going
+// to fill the journal with it.
+const warnedAbout = new Set();
+
+// How many group messages we have stored since this process started.
+let ingested = 0;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Baileys logs its whole protocol conversation at info level. In journalctl
@@ -249,7 +257,20 @@ async function handle(sock, msg) {
   const inGroup = isGroup(chat);
 
   // Only the group we were configured for. The bot may sit in others.
-  if (inGroup && GROUP_JID && chat !== GROUP_JID) return;
+  if (inGroup && GROUP_JID && chat !== GROUP_JID) {
+    // Said once per group, then never again. A wrong GROUP_JID drops every
+    // message the group writes and looks exactly like a quiet group: the bot
+    // still answers private messages, nothing fails, nothing is logged, and
+    // the history silently stops growing. That cost us most of a day.
+    if (!warnedAbout.has(chat)) {
+      warnedAbout.add(chat);
+      console.warn(
+        `ignoring messages from ${chat}: GROUP_JID is ${GROUP_JID}. ` +
+          'If that is the group we are meant to read, fix GROUP_JID in .env.'
+      );
+    }
+    return;
+  }
 
   const sender = senderOf(msg);
   // Another bot. Not indexed, not answered, not cited.
@@ -294,6 +315,15 @@ async function ingestText(msg, text, sender, when) {
         mentions: msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
       },
     ]);
+    // Counted, not quoted. A working ingestion used to be completely silent,
+    // which made "the group is quiet" and "we are dropping everything the
+    // group says" look identical from the journal. The text itself stays out
+    // of it: this is 153 people's private conversation and the journal is
+    // readable by anybody with a shell on the box.
+    ingested += 1;
+    if (ingested === 1 || ingested % 25 === 0) {
+      console.log(`${ingested} group messages ingested since start`);
+    }
   } catch (error) {
     console.error('ingest failed:', error.message);
   }
