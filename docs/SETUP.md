@@ -262,9 +262,12 @@ server {
     # answer they were actually given. The bare /feedback below it, which
     # rates by member name, stays private.
     #
-    # Quoted, because nginx reads { and } as block delimiters and refuses to
-    # start on an unquoted regex containing them: unknown directive "36}$".
-    location ~ "^/feedback/[0-9a-fA-F-]{36}$" {
+    # No {36} for the length of a uuid: nginx reads { and } as block
+    # delimiters and refuses to start on an unquoted regex containing them.
+    # The + is enough. It requires at least one character after the slash,
+    # so bare /feedback, which rates by member name, stays private, and the
+    # API answers 404 to anything that is not one of its own answer ids.
+    location ~ ^/feedback/[0-9a-fA-F-]+$ {
         include proxy_params; proxy_pass http://127.0.0.1:8000;
     }
 
