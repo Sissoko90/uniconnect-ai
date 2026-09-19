@@ -31,6 +31,22 @@ import * as api from './api.js';
 
 const GROUP_JID = process.env.GROUP_JID || '';
 
+// The group's name in the database, which is not its address on WhatsApp.
+//
+// These were the same value and that was a bug hiding in plain sight. The
+// history is loaded by the parser under a name somebody chooses on the
+// command line, "meti-cohort-1", while the worker was storing and searching
+// under the WhatsApp JID. So every question asked through WhatsApp searched
+// a corpus containing only what the bot had seen live, and the 875 messages
+// of the export, the hackathon brief and the video guide were reachable from
+// the web page alone.
+//
+// It is invisible because neither side is wrong on its own: both store and
+// both retrieve, just in two different groups.
+//
+// Defaults to the JID so an existing deployment keeps working unchanged.
+const GROUP_ID = process.env.GROUP_ID || GROUP_JID;
+
 // Other bots in the group, by JID, comma separated. Their messages are not
 // indexed and never trigger a reply.
 //
@@ -245,7 +261,7 @@ async function handleReaction(event) {
   const user = event.reaction?.key?.participant || event.reaction?.key?.remoteJid;
   if (!user) return;
 
-  await api.feedback(user, GROUP_JID, helpful);
+  await api.feedback(user, GROUP_ID, helpful);
   console.log(`${emoji} from ${user}: rated ${helpful ? 'helpful' : 'unhelpful'}`);
 }
 
@@ -305,7 +321,7 @@ async function handle(sock, msg) {
 /** Everything said in the group goes to the API, mentioned or not. */
 async function ingestText(msg, text, sender, when) {
   try {
-    await api.sendMessages(GROUP_JID, [
+    await api.sendMessages(GROUP_ID, [
       {
         author: sender,
         author_name: msg.pushName || null,
@@ -339,7 +355,7 @@ async function ingestVoice(sock, msg, sender, when) {
       reuploadRequest: sock.updateMediaMessage,
     });
     const result = await api.sendVoice({
-      group_id: GROUP_JID,
+      group_id: GROUP_ID,
       author: sender,
       author_name: msg.pushName || null,
       said_at: when,
@@ -365,7 +381,7 @@ async function handleGroup(sock, msg, text, sender) {
     return;
   }
 
-  const result = await api.ask(question, sender, GROUP_JID, false);
+  const result = await api.ask(question, sender, GROUP_ID, false);
 
   // Once per topic. The second person to ask gets the answer; the fifth gets
   // silence, because by then it is on the screen just above them.
@@ -386,7 +402,7 @@ async function handlePrivate(sock, msg, text, sender) {
   // In private the bot always answers. This half of the product costs the
   // group nothing, which is exactly why it is allowed to be talkative.
   if (matches(text, CATCHUP_PHRASES)) {
-    const result = await api.catchup(sender, GROUP_JID, text);
+    const result = await api.catchup(sender, GROUP_ID, text);
     const lead = result.first_time
       ? 'I had no record of your last visit, so here are the last two days.\n\n'
       : '';
@@ -395,7 +411,7 @@ async function handlePrivate(sock, msg, text, sender) {
   }
 
   if (matches(text, TIMELINE_PHRASES)) {
-    const result = await api.timeline(GROUP_JID);
+    const result = await api.timeline(GROUP_ID);
     await reply(
       sock,
       msg,
@@ -406,7 +422,7 @@ async function handlePrivate(sock, msg, text, sender) {
     return;
   }
 
-  const result = await api.ask(text, sender, GROUP_JID, true);
+  const result = await api.ask(text, sender, GROUP_ID, true);
   await reply(sock, msg, withSources(result));
 }
 
@@ -443,7 +459,11 @@ async function checkGroupJid(sock) {
 
   const match = groups.find((g) => g.id === GROUP_JID);
   if (match) {
-    console.log(`reading group "${match.subject}" (${groups.length} groups joined)`);
+    // The name it is filed under is printed too. It has to equal the
+    // --group-id the parser was given, and there is no way to check that
+    // from here: both values are valid on their own and a mismatch simply
+    // means the questions and the history are in two different groups.
+    console.log(`reading group "${match.subject}" as ${GROUP_ID}`);
     return;
   }
 
@@ -470,7 +490,7 @@ function startBackgroundJobs(sock) {
  * the same mention twice. Nothing is posted in the group.
  */
 async function deliverAlerts(sock) {
-  const { alerts } = await api.pendingAlerts(GROUP_JID);
+  const { alerts } = await api.pendingAlerts(GROUP_ID);
   if (!alerts.length) return;
 
   const delivered = [];
@@ -520,7 +540,7 @@ async function maybePostDigest(sock) {
   if (now.getUTCHours() !== DIGEST_HOUR_UTC) return;
   if (lastDigestDay() === today) return;
 
-  const result = await api.digest(GROUP_JID, process.env.DIGEST_LANG || 'en');
+  const result = await api.digest(GROUP_ID, process.env.DIGEST_LANG || 'en');
 
   // A quiet day is a result, not an error. Announcing silence is noise, and
   // the day counts as done: there is nothing to retry.

@@ -264,8 +264,14 @@ nano .env
 ```bash
 API_URL=http://127.0.0.1:8000
 WORKER_TOKEN=<the same value as in the API's .env>
-GROUP_JID=          # left empty for now, filled in below
+GROUP_JID=          # the WhatsApp address, left empty for now, filled in below
+GROUP_ID=meti-cohort-1   # the --group-id you gave the parser in step 6
 ```
+
+Those last two are different things and the difference matters. `GROUP_JID`
+is where the group lives on WhatsApp, a number ending in `@g.us` that only
+exists once the bot has joined. `GROUP_ID` is what the history is filed under
+in the database, a name you chose on the command line before any of this.
 
 ### Pair the phone
 
@@ -310,10 +316,28 @@ added to the group yet, do that first, then re-run.
 Without `GROUP_JID` the worker exits immediately and systemd restarts it in a
 loop; the log says `GROUP_JID is not set` on every attempt.
 
-**Use the same `--group-id` everywhere.** The value you gave the parser in
-step 6 and the group this worker reads must match. They are the key linking
-the history to the questions: different values mean every answer is "I could
-not find anything", with no error anywhere to explain why.
+**`GROUP_ID` must equal the `--group-id` you gave the parser** in step 6.
+That value is the key linking the history to the questions, and getting it
+wrong is the most expensive mistake on this page because nothing reports it.
+
+We made it. The worker used `GROUP_JID` for both jobs, so it stored and
+searched under the WhatsApp address while the parser had filed 875 messages,
+the hackathon brief and the video guide under `meti-cohort-1`. Every question
+asked through WhatsApp searched a corpus holding only what the bot had seen
+live, the whole history was reachable from the web page alone, and neither
+side was wrong on its own: both stored, both retrieved, in two different
+groups. It cost a day, and the only symptom was answers that were oddly
+uninformed.
+
+The worker says which group it is reading, and under which name, every time
+it starts:
+
+```
+reading group "METI UniPods AI Program 2026 Cohort" as meti-cohort-1
+```
+
+Check that second name against the parser's `--group-id`. If the bot is not
+in the group at all, it prints every group the number belongs to instead.
 
 The session lives in `adapters/whatsapp/auth_info/`. **Treat that directory
 like a password**: anyone who has it can send WhatsApp messages as the bot. It
