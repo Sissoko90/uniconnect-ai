@@ -447,15 +447,12 @@ async function maybePostDigest(sock) {
   if (now.getUTCHours() !== DIGEST_HOUR_UTC) return;
   if (lastDigestDay() === today) return;
 
-  // Written before the post, not after. Sending twice is worse than missing
-  // one: if the send fails we lose a digest, if it half-succeeds and we retry
-  // the group gets two.
-  writeFileSync(DIGEST_STATE, today);
-
   const result = await api.digest(GROUP_JID, process.env.DIGEST_LANG || 'en');
 
-  // A quiet day is a result, not an error. Announcing silence is noise.
+  // A quiet day is a result, not an error. Announcing silence is noise, and
+  // the day counts as done: there is nothing to retry.
   if (result.quiet || !result.digest) {
+    writeFileSync(DIGEST_STATE, today);
     console.log('quiet day, no digest posted');
     return;
   }
@@ -466,6 +463,16 @@ async function maybePostDigest(sock) {
       `Here is what happened since yesterday:\n\n${result.digest}\n\n` +
       'Ask me anything about it in private.',
   });
+
+  // Marked done only once it has actually gone out.
+  //
+  // It used to be marked first, to make a double post impossible. That traded
+  // a narrow risk for a certain one: the first attempt of the day failed
+  // because the model was unreachable, the day was already marked done, and
+  // no digest was ever posted. Anything thrown above leaves the day unmarked,
+  // so the next check ten minutes later tries again, for as long as the
+  // digest hour lasts.
+  writeFileSync(DIGEST_STATE, today);
   console.log('digest posted');
 }
 
