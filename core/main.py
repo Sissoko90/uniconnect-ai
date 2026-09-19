@@ -31,6 +31,7 @@ import answer as answer_engine
 import auth
 import catchup as catchup_engine
 import ingest
+import intent
 import limits
 import metrics as metrics_engine
 import recap
@@ -128,9 +129,32 @@ class AskResponse(BaseModel):
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest) -> AskResponse:
+    # Clients that mirror the WhatsApp trigger send it through. The worker
+    # strips it; the web page has nothing to mention, so it does not.
+    question = intent.strip_trigger(req.question)
+
+    if intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
+        try:
+            digest = recap.daily_digest(pool, req.group_id, lang=None)
+        except Exception as exc:  # noqa: BLE001
+            # Falling through beats a 503 here. This endpoint is the public
+            # page, and somebody asking for a summary should get the ordinary
+            # answer rather than an error, even a well-worded one.
+            print(f"summary failed, answering as a question: {exc}", flush=True)
+            digest = {}
+
+        if digest.get("digest"):
+            return AskResponse(
+                answer=digest["digest"],
+                sources=[],
+                meta={"duplicate": False, "summary": True,
+                      "covering": digest["since"], "messages": digest["message_count"]},
+            )
+        # Quiet period, or no model: answer it as an ordinary question.
+
     result = answer_engine.answer_question(
         pool,
-        question=req.question,
+        question=question,
         user=req.user,
         group_id=req.group_id,
         private=req.private,
