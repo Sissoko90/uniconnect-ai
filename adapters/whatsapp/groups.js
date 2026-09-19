@@ -26,6 +26,26 @@ import qrcode from 'qrcode-terminal';
 
 const PAIR_NUMBER = (process.env.PAIR_NUMBER || '').replace(/\D/g, '');
 
+// The number written in the documentation as an example. Somebody ran it
+// verbatim, WhatsApp issued a code for an account that does not exist, and
+// the phone answered "impossible de se connecter" with nothing to say why.
+// An example that looks like a real number will be pasted as one.
+const PLACEHOLDER = '22370001234';
+
+if (PAIR_NUMBER === PLACEHOLDER) {
+  console.error('\n  PAIR_NUMBER is still the example from the documentation.');
+  console.error('  Use the bot phone\'s own number: digits only, country code');
+  console.error('  included, no plus sign and no spaces.\n');
+  console.error('    +223 70 00 12 34   becomes   22370001234\n');
+  process.exit(1);
+}
+
+if (PAIR_NUMBER && (PAIR_NUMBER.length < 8 || PAIR_NUMBER.length > 15)) {
+  console.error(`\n  PAIR_NUMBER has ${PAIR_NUMBER.length} digits, which is not a`);
+  console.error('  phone number with a country code. Expected between 8 and 15.\n');
+  process.exit(1);
+}
+
 const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 const alreadyPaired = Boolean(state.creds?.registered);
 

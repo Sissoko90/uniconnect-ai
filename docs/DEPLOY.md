@@ -274,7 +274,7 @@ GROUP_JID=          # left empty for now, filled in below
 > Baileys processes sharing one `auth_info/` fight over the session.
 
 ```bash
-sudo -u uniconnect PAIR_NUMBER=22370001234 npm run groups
+sudo -u uniconnect PAIR_NUMBER=<the bot's own number> npm run groups
 ```
 
 `PAIR_NUMBER` is the bot's own number, digits only, country code included, no
