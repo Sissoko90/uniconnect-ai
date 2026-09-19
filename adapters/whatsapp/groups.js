@@ -21,6 +21,8 @@
  *   Nothing has to render correctly for that to work.
  */
 
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+
 import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 
@@ -46,7 +48,33 @@ if (PAIR_NUMBER && (PAIR_NUMBER.length < 8 || PAIR_NUMBER.length > 15)) {
   process.exit(1);
 }
 
-const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+const AUTH_DIR = 'auth_info';
+
+/** Is there a finished, usable session on disk? */
+function hasRealSession() {
+  try {
+    const creds = JSON.parse(readFileSync(`${AUTH_DIR}/creds.json`, 'utf8'));
+    return Boolean(creds.registered);
+  } catch {
+    return false;
+  }
+}
+
+// A failed pairing attempt leaves credentials behind that are worse than
+// nothing: the next run finds them, tries to log in as whatever number was
+// given last time, is rejected, and the socket is dead before the new pairing
+// request can even be sent. The error then points at the new number, which is
+// fine, instead of the old one, which is not there any more to be seen.
+//
+// This is deleted automatically rather than left as a step to remember,
+// because it was forgotten three times in a row, and a half-finished attempt
+// has no value worth keeping.
+if (PAIR_NUMBER && existsSync(AUTH_DIR) && !hasRealSession()) {
+  rmSync(AUTH_DIR, { recursive: true, force: true });
+  console.log('\n  Cleared a half-finished pairing attempt.');
+}
+
+const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 const alreadyPaired = Boolean(state.creds?.registered);
 
 const sock = makeWASocket({
@@ -78,8 +106,9 @@ if (PAIR_NUMBER && !alreadyPaired) {
     console.log('  three minutes, then the connection closes and you start over.\n');
   } catch (error) {
     console.error('Could not request a pairing code:', error.message);
-    console.error('Check that PAIR_NUMBER is the bot number in full, digits only,');
-    console.error('country code included and no plus sign. Example: 22370001234\n');
+    console.error('PAIR_NUMBER must be the bot phone\'s own number: digits only,');
+    console.error('country code included, no plus sign and no spaces.');
+    console.error('A number without its country code is rejected the same way.\n');
     process.exit(1);
   }
 }
