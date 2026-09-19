@@ -135,20 +135,36 @@ def ask(req: AskRequest) -> AskResponse:
 
     if intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
         try:
-            digest = recap.daily_digest(pool, req.group_id, lang=None)
+            if req.private:
+                # In a direct message, "summarise" means "what did I miss",
+                # and we can answer that for this person specifically rather
+                # than handing them the same group digest as everybody else.
+                # It also moves their bookmark, which is what they want: the
+                # next one starts where this ended.
+                brief = catchup_engine.catch_up(
+                    pool, user=req.user, group_id=req.group_id, question=question
+                )
+                text, covering, count = (
+                    brief.get("summary"), brief.get("since"), brief.get("message_count")
+                )
+            else:
+                digest = recap.daily_digest(pool, req.group_id, lang=None)
+                text, covering, count = (
+                    digest.get("digest"), digest.get("since"), digest.get("message_count")
+                )
         except Exception as exc:  # noqa: BLE001
             # Falling through beats a 503 here. This endpoint is the public
             # page, and somebody asking for a summary should get the ordinary
             # answer rather than an error, even a well-worded one.
             print(f"summary failed, answering as a question: {exc}", flush=True)
-            digest = {}
+            text = None
 
-        if digest.get("digest"):
+        if text:
             return AskResponse(
-                answer=digest["digest"],
+                answer=text,
                 sources=[],
                 meta={"duplicate": False, "summary": True,
-                      "covering": digest["since"], "messages": digest["message_count"]},
+                      "personal": req.private, "covering": covering, "messages": count},
             )
         # Quiet period, or no model: answer it as an ordinary question.
 

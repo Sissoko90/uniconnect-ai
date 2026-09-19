@@ -86,6 +86,11 @@ where are the session recordings?
 qui est responsable de la vidéo ?
 ```
 
+Asking for a summary in a private chat gives you **your** catch-up, not the
+same digest everybody else gets: what happened since you were last active.
+The same words in the group give the group's digest, because there is no
+"you" there.
+
 ### Catch up on what you missed
 
 Any of these works, in either language:
