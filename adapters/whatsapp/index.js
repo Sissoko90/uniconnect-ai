@@ -80,6 +80,23 @@ const answeredAloud = new Map();
 const TOPIC_TTL_MS = 6 * 60 * 60 * 1000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Baileys logs its whole protocol conversation at info level. In journalctl
+// that buries the lines that matter, and the lines that matter here are the
+// ones somebody reads at four in the morning to find out what the bot is
+// doing. Warnings and errors still come through.
+//
+// BAILEYS_LOG=info brings the commentary back when debugging the connection.
+const quiet = {
+  level: process.env.BAILEYS_LOG || 'warn',
+  child: () => quiet,
+  trace: () => {},
+  debug: () => {},
+  info: () => {},
+  warn: (...args) => console.error(...args),
+  error: (...args) => console.error(...args),
+  fatal: (...args) => console.error(...args),
+};
 const humanPause = () => sleep(MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));
 
 /** The text of a message, whatever shape WhatsApp wrapped it in. */
@@ -138,7 +155,7 @@ function withSources(result) {
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 
-  const sock = makeWASocket({ auth: state });
+  const sock = makeWASocket({ auth: state, logger: quiet });
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
