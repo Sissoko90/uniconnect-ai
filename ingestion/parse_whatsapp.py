@@ -43,6 +43,21 @@ NOISE = re.compile(
     re.IGNORECASE,
 )
 
+# Traffic between the group and the bot, which is not group content.
+#
+# Seen in a private chat the morning after launch: "what is the submission
+# deadline?" was answered with 'According to Is any of it real: "@ask give me
+# a summary"'. A question put to the bot is a command, and the bot's own reply
+# is something the bot already said, so quoting either back is a loop. The
+# worker applies the same rule to live messages (adapters/whatsapp/index.js);
+# this is the same rule for an export, which is written after the fact and so
+# contains both sides of every exchange.
+ADDRESSED_TO_BOT = re.compile(r"^\s*@ask\b", re.IGNORECASE)
+
+# The bot's display name in the export, as WhatsApp writes it. Configurable
+# because the name follows whichever number the team paired.
+BOT_AUTHOR = os.environ.get("BOT_AUTHOR", "Uniconnect-IA")
+
 FRENCH_MARKERS = {
     "je", "tu", "nous", "vous", "est", "les", "des", "une", "pour", "avec",
     "dans", "pas", "que", "qui", "c'est", "bonjour", "merci", "oui", "non",
@@ -152,7 +167,14 @@ def parse(path: str, tz_name: str) -> list[dict]:
         )
 
     # Attachments and deleted messages leave an empty body once stripped.
-    return [m for m in messages if m["content"].strip() and not NOISE.search(m["content"])]
+    return [
+        m
+        for m in messages
+        if m["content"].strip()
+        and not NOISE.search(m["content"])
+        and not ADDRESSED_TO_BOT.match(m["content"])
+        and m["author"].casefold() != BOT_AUTHOR.casefold()
+    ]
 
 
 def load(messages: list[dict], group_id: str, title: str, dsn: str) -> tuple[str, int]:

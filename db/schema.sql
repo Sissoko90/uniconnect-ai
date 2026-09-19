@@ -123,6 +123,17 @@ create table answers (
   input_tokens int,
   output_tokens int,
 
+  -- Written without a model: the search ran, the model did not, and the bot
+  -- quoted its closest message instead of composing an answer.
+  --
+  -- Recorded because a degraded answer must never be reused as a duplicate.
+  -- On the first morning, with the Anthropic balance empty, "what is the
+  -- submission deadline?" was answered with a quote, that quote was stored,
+  -- and every later phrasing of the question was served the same quote as an
+  -- already-answered question. The stopgap would have outlived the outage
+  -- that caused it by thirty days.
+  degraded boolean not null default false,
+
   -- The question, embedded. Duplicate detection is a similarity search over
   -- this column. Added now rather than Tuesday because altering a populated
   -- table mid-hackathon is how we lose an evening.

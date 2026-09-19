@@ -109,6 +109,28 @@ def test_inconsistent_dates_are_refused(tmp_path):
         parse(tmp_path, "13/14/26, 10:00 - Steven: impossible\n")
 
 
+def test_the_conversation_with_the_bot_is_not_group_content(tmp_path):
+    """Found in a private chat the morning after launch: "what is the
+    submission deadline?" was answered with 'According to Is any of it real:
+    "@ask give me a summary"'.
+
+    An export made after the bot went live contains both sides of every
+    exchange with it. A question put to the bot is a command and its reply is
+    something the bot already said, so indexing either turns one person's
+    question into the source for the next person's.
+    """
+    export = (
+        "[19/09/2026, 09:32:08] Steven: @ask give me a summary\n"
+        "[19/09/2026, 09:32:11] ~Uniconnect-IA: According to Makan: the call is at 18h\n"
+        "[19/09/2026, 09:33:00] Steven: @Ask what is the deadline\n"
+        "[19/09/2026, 09:34:00] Makan: the deadline is Thursday\n"
+    )
+
+    messages = parse(tmp_path, export)
+
+    assert [m["content"] for m in messages] == ["the deadline is Thursday"]
+
+
 def test_language_detection():
     assert p.detect_lang("Bonjour, je cherche le lien du call") == "fr"
     assert p.detect_lang("Where is the recording") == "en"

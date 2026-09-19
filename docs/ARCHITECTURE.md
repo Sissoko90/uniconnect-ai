@@ -17,6 +17,7 @@ flowchart LR
     API -->|write answer| C[Claude]
     EX[Chat export] --> P[parse_whatsapp.py] --> DB
     REC[Call recording] --> T[transcribe.py] --> DB
+    DOC[Brief or schedule] --> D[document.py] --> DB
     T -.-> G[Groq Whisper]
     DB --> E[embed.py] -.-> V
 ```

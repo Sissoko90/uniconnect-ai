@@ -186,6 +186,35 @@ Then get the recap:
 curl -s localhost:8000/recap/latest/meti-cohort-1
 ```
 
+## 8b. Add a document
+
+The rules, briefs and schedules that were shared once and scrolled past. They
+hold the answers people ask for most and they are the hardest thing in a group
+to find again, which is the "and more" in "calls, chats, and more".
+
+```bash
+python ingestion/document.py brief.txt --group-id meti-cohort-1 \
+    --title "METI UniPods Hackathon brief" --dated 2026-09-15 --dry-run
+python ingestion/document.py brief.txt --group-id meti-cohort-1 \
+    --title "METI UniPods Hackathon brief" --dated 2026-09-15
+python ingestion/embed.py
+```
+
+Plain text or markdown. For a PDF, extract the text first:
+
+```bash
+pdftotext -layout brief.pdf brief.txt
+```
+
+`--dry-run` prints the blocks without writing anything. It is worth running:
+the document is cut on blank lines into pieces small enough to be quoted whole
+and large enough to answer on their own, and a badly extracted PDF shows up
+here as one enormous block or a hundred tiny ones. Citations name the document,
+never a member, because nobody said it.
+
+`--dated` is the date the document is from, not the day it was loaded, so it
+lands in the right place on the timeline and in a catch-up.
+
 ## The endpoints
 
 | Endpoint | What it is for |

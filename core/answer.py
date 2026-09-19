@@ -348,6 +348,7 @@ def record(
     qvec: list[float] | None,
     private: bool = False,
     usage: dict | None = None,
+    degraded: bool = False,
 ) -> None:
     """Best effort: a failure here must never cost the user their answer.
 
@@ -361,8 +362,9 @@ def record(
             conn.execute(
                 """insert into answers
                      (question, answer, cited_ids, asked_by, group_id,
-                      question_embedding, asked_privately, input_tokens, output_tokens)
-                   values (%s, %s, %s, %s, %s, %s::vector, %s, %s, %s)""",
+                      question_embedding, asked_privately, input_tokens,
+                      output_tokens, degraded)
+                   values (%s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s)""",
                 (
                     question,
                     answer,
@@ -373,6 +375,7 @@ def record(
                     private,
                     (usage or {}).get("input_tokens"),
                     (usage or {}).get("output_tokens"),
+                    degraded,
                 ),
             )
     except Exception:  # noqa: BLE001 - metrics are not worth an outage
@@ -418,6 +421,11 @@ where a.group_id = %(group_id)s
   -- frozen for thirty days and served to everybody who asks the same thing,
   -- and the thumbs-down does nothing at all.
   and coalesce(a.rating, 0) >= 0
+  -- Nor one the bot produced without a model. Quoting the closest message is
+  -- a reasonable stopgap while the balance is empty and a bad thing to keep:
+  -- without this the outage's answers are served for thirty days, including
+  -- long after the balance is back.
+  and not a.degraded
   and a.asked_at > now() - make_interval(days => %(max_age)s)
   -- Only ever match a question of the same kind. A question asked in a
   -- direct message must never come back as "this was already answered" in
@@ -633,9 +641,24 @@ def answer_question(
             text, used = _quote_best(question, hits)
             degraded = True
     else:
+        # No key at all, or the daily cap is reached. Either way the answer
+        # below is a quote and not a written answer, and saying otherwise in
+        # the metadata is how a stopgap gets stored as the real thing.
         text, used = _quote_best(question, hits)
+        degraded = True
 
-    record(pool, question, text, user, group_id, [h["id"] for h in used], qvec, private, usage)
+    record(
+        pool,
+        question,
+        text,
+        user,
+        group_id,
+        [h["id"] for h in used],
+        qvec,
+        private,
+        usage,
+        degraded=degraded,
+    )
 
     return {
         "answer": text,
