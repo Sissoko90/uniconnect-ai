@@ -274,11 +274,27 @@ GROUP_JID=          # left empty for now, filled in below
 > Baileys processes sharing one `auth_info/` fight over the session.
 
 ```bash
+sudo -u uniconnect PAIR_NUMBER=22370001234 npm run groups
+```
+
+`PAIR_NUMBER` is the bot's own number, digits only, country code included, no
+plus sign. The command prints eight characters. On the bot's phone: **WhatsApp,
+Settings, Linked devices, Link a device**, then **"Link with phone number
+instead"**, and type them. The code expires after a minute or two; run the
+command again for a new one.
+
+**Or with a QR code**, if you prefer:
+
+```bash
 sudo -u uniconnect npm run groups
 ```
 
-A QR code appears in the terminal. On the bot's phone: **WhatsApp → Settings →
-Linked devices → Link a device**, and scan it.
+The QR is drawn with half-block characters, which the terminal has to render
+at a readable size on a dark background. Over SSH that often fails and nothing
+says so: the phone simply never focuses, and a window too small looks exactly
+like a light theme, which looks exactly like a code that expired twenty
+seconds ago. If it will not scan, widen the window, zoom out, and scan the
+**last** code printed. If it still will not, use the pairing code above.
 
 Once linked, the command prints every group the number is in:
 
@@ -533,6 +549,7 @@ and write a migration instead.
 | Worker logs `Cannot reach the API` | The API is not running, or `API_URL` is wrong |
 | `npm run groups` lists nothing | The number is not in the group yet |
 | QR code asked for again | `auth_info/` was deleted, or the device was unlinked from the phone |
+| The QR will not scan | Terminal too small, light background, or an expired code. Use `PAIR_NUMBER=...` instead |
 | Bot silent in the group | By design. It answers `@ask`, direct messages, and posts the daily digest |
 | Answers say "I could not find anything" | History not loaded (step 6) or not embedded (step 7) |
 | Citations show `+229…42` | Nobody has told us that person's name yet; it fills in as people speak |
