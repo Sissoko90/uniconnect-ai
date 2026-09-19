@@ -23,6 +23,9 @@ SUMMARY_PHRASES = (
     "summary", "summarise", "summarize", "sum up", "overview", "recap",
     "what's happening", "whats happening", "what is happening", "catch me up",
     "résumé", "resume", "resume-moi", "recapitulatif", "récapitulatif",
+    # With the accent, which is how anybody typing French properly spells it.
+    # Only the bare "recap" was listed, so "récap du jour" matched nothing.
+    "récap",
     "quoi de neuf", "que se passe", "ce qui se passe",
     # Promised in USAGE.md and matched by nothing, so the documented way to
     # ask for a catch-up was answered as an ordinary question and found
@@ -111,6 +114,32 @@ def wants_an_overview(question: str) -> bool:
     if not any(phrase in lowered for phrase in SUMMARY_PHRASES):
         return False
     return any(marker in lowered for marker in COMPLETENESS)
+
+
+# What happened on the call. Distinct from every other summary here, and it
+# was reachable by nobody: the worker has no client for /recap, so the
+# automatic call recap, feature three of the project's own list, existed as a
+# curl command and nothing else.
+#
+# A call word is required. "recap" on its own is in SUMMARY_PHRASES and means
+# the daily digest, which is what people mean nine times out of ten.
+RECAP_PHRASES = (
+    "recap", "récap", "compte rendu", "compte-rendu", "what happened",
+    "qu'est-ce qui s'est dit", "ce qui s'est dit", "minutes",
+)
+
+CALL_WORDS = (
+    "call", "appel", "réunion", "reunion", "meeting", "open hour",
+    "session", "visio", "teams", "zoom",
+)
+
+
+def wants_a_call_recap(question: str) -> bool:
+    """Decisions and action items from the last call that was transcribed."""
+    lowered = question.lower()
+    return any(p in lowered for p in RECAP_PHRASES) and any(
+        w in lowered for w in CALL_WORDS
+    )
 
 
 def wants_the_timeline(question: str) -> bool:

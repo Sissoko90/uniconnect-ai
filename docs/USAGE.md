@@ -14,6 +14,7 @@ answers**, and nobody else sees any of it.
 | The group's schedule | `@ask timeline` | `timeline` | yes |
 | A summary of the group | `@ask résumé` | see below | yes |
 | The whole group explained | `@ask résumé complet` | `résumé complet` | yes |
+| What was decided on the last call | `@ask recap de l'appel` | `recap de l'appel` | yes |
 | Your own catch-up | not applicable | `what did I miss` | no, see below |
 | Say an answer was wrong | react 👍 👎 | react 👍 👎 | the buttons under the answer |
 | Voice notes, transcribed and searchable | yes | yes | no |
@@ -159,6 +160,23 @@ what, and what is still open.
 
 Ask for it once, sitting down, not on the way somewhere. It is longer than
 anything else the bot writes, deliberately.
+
+### What was decided on a call
+
+```
+recap de l'appel
+compte rendu de la réunion
+what happened on the call
+recap of the Open Hour
+```
+
+Decisions, action items with their owner when the call named one, and the
+questions left open. Built from the recording's transcript, so it only works
+for calls somebody has added; the bot says so plainly when there are none
+rather than answering with whatever message happens to mention a call.
+
+The word "recap" on its own means the daily digest, which is what people
+usually mean. Name the call and you get the call.
 
 ### See the schedule
 

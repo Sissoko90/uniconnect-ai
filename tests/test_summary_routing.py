@@ -189,3 +189,34 @@ def test_an_overview_needs_to_be_a_summary_request_first():
     """"complet" on its own is not a request for anything."""
     assert not intent.wants_an_overview("le dossier est complet")
     assert not intent.wants_an_overview("everything is fine")
+
+
+# --------------------------------------------------------------------------
+# The last call
+# --------------------------------------------------------------------------
+
+
+def test_asking_about_a_call_reaches_the_call_recap():
+    """It reached nobody. The worker has no /recap in its API client, so the
+    automatic call recap, feature three of the project's own list, existed as
+    a curl command and nothing else."""
+    for question in ["recap de l'appel", "compte rendu de la réunion",
+                     "what happened on the call", "recap of the Open Hour",
+                     "ce qui s'est dit pendant le meeting"]:
+        assert intent.wants_a_call_recap(question), question
+
+
+def test_recap_without_a_call_is_the_daily_digest():
+    """"Recap" on its own means the digest, which is what people mean nine
+    times out of ten. Sending them a call transcript instead would be worse
+    than not having the feature."""
+    for question in ["recap", "récap du jour", "give me a recap"]:
+        assert not intent.wants_a_call_recap(question), question
+        assert intent.wants_a_summary(question), question
+
+
+def test_a_question_about_a_call_is_not_a_recap_request():
+    """"When is the next call" is an ordinary question with an ordinary
+    answer, and it cites the message that fixed the date."""
+    for question in ["when is the next call", "quel est le lien du meeting"]:
+        assert not intent.wants_a_call_recap(question), question

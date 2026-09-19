@@ -98,6 +98,21 @@ app = FastAPI(title="UniConnect AI", lifespan=lifespan)
 # --------------------------------------------------------------------------
 
 
+# Said when somebody asks about a call and none has been transcribed yet.
+# Better than falling through to retrieval, which would answer with whatever
+# message happens to mention a call and look like it had misunderstood.
+NO_CALL = {
+    "fr": (
+        "Aucun appel n'a encore été transcrit. Une fois un enregistrement "
+        "ajouté, je peux en donner les décisions et les actions à mener."
+    ),
+    "en": (
+        "No call has been transcribed yet. Once a recording is added I can "
+        "give you its decisions and action items."
+    ),
+}
+
+
 class Source(BaseModel):
     author: str
     said_at: str
@@ -169,6 +184,34 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
     # strangers. It used to be reachable only from a private WhatsApp chat,
     # which meant the group and the web page could not use a feature the
     # usage guide lists without qualification.
+    # The last call's decisions and action items. Checked before the
+    # summaries because "recap" alone means the daily digest, and only a
+    # request that also names a call means this.
+    #
+    # It had no path from any client at all: the worker has no /recap call in
+    # it, so the automatic call recap existed as a curl command and nothing
+    # else. It is as public as any other answer, being built from a recording
+    # the group itself was on.
+    if intent.wants_a_call_recap(question) and not limits.over_spend_cap(pool):
+        try:
+            source_id = recap.latest_call(pool, req.group_id)
+            if source_id is None:
+                lang = answer_engine.detect_lang(question)
+                return AskResponse(
+                    answer=NO_CALL[lang], sources=[],
+                    meta={"duplicate": False, "call_recap": True, "empty": True},
+                )
+            written = recap.call_recap(pool, source_id)
+            if written.get("recap"):
+                return AskResponse(
+                    answer=written["recap"],
+                    sources=[],
+                    meta={"duplicate": False, "call_recap": True,
+                          "call": written.get("title")},
+                )
+        except Exception as exc:  # noqa: BLE001
+            print(f"call recap failed, answering as a question: {exc}", flush=True)
+
     if intent.wants_the_timeline(question) and not limits.over_spend_cap(pool):
         try:
             drawn = timeline_engine.build(pool, req.group_id)
