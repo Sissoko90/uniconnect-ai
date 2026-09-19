@@ -546,7 +546,7 @@ and write a migration instead.
 | `"generation": false` | `ANTHROPIC_API_KEY` missing or misspelled in `.env` |
 | `"worker_auth": false` | `WORKER_TOKEN` empty in the API's `.env` |
 | Worker logs `401` | The two `WORKER_TOKEN` values do not match |
-| Worker logs `Cannot reach the API` | The API is not running, or `API_URL` is wrong |
+| Worker logs `Cannot reach the API` | The API container is not running. `docker compose ps`, then `docker compose up -d api`. The message names the address it tried |
 | `npm run groups` lists nothing | The number is not in the group yet |
 | QR code asked for again | `auth_info/` was deleted, or the device was unlinked from the phone |
 | The QR will not scan | Terminal too small, light background, or an expired code. Use `PAIR_NUMBER=...` instead |

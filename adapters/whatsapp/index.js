@@ -460,7 +460,14 @@ async function main() {
       console.error('The API has no WORKER_TOKEN configured. Everything but /ask will be refused.');
     }
   } catch (error) {
-    console.error('Cannot reach the API:', error.message);
+    // Name the address. "fetch failed" on its own sends people looking at
+    // WhatsApp, the token, the group id, anywhere but the one container that
+    // is not running.
+    const url = process.env.API_URL || 'http://127.0.0.1:8000';
+    console.error(`Cannot reach the API at ${url}: ${error.message}`);
+    console.error('  Is it up?   docker compose ps');
+    console.error('  Start it:   docker compose up -d api');
+    console.error('  Check it:   curl -s ' + url + '/health');
     process.exit(1);
   }
 
