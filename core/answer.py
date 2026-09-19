@@ -204,7 +204,7 @@ fts as (
       and u.fts @@ to_tsquery('simple', %(tsq)s)
     limit %(candidates)s
 )
-select u.id, coalesce(p.display_name, u.author) as author,
+select u.id, u.source_id, coalesce(p.display_name, u.author) as author,
        u.said_at, u.content, u.permalink, s.kind,
        coalesce(1.0 / (%(rrf_k)s + vec.rank), 0)
      + coalesce(1.0 / (%(rrf_k)s + fts.rank), 0) as score
@@ -231,7 +231,7 @@ limit %(limit)s
 """
 
 FTS_ONLY_SQL = """
-select u.id, coalesce(p.display_name, u.author) as author,
+select u.id, u.source_id, coalesce(p.display_name, u.author) as author,
        u.said_at, u.content, u.permalink, s.kind,
        ts_rank(u.fts, to_tsquery('simple', %(tsq)s)) as score
 from utterances u
@@ -242,6 +242,88 @@ where s.group_id = %(group_id)s
 order by score desc
 limit %(limit)s
 """
+
+
+# How many messages either side of a match to read along with it, and how far
+# in time to look for them.
+#
+# A retrieved message on its own is often meaningless. "Oui, vendredi 14h"
+# answers a question asked two messages earlier, and the model was being
+# handed the answer without the question, then asked what it meant. In a chat
+# the unit of meaning is the exchange, not the message.
+#
+# Two either side is enough for the short back and forth this fixes, and the
+# time window stops a quiet source dragging in something said the next day
+# that happens to be adjacent. CONTEXT_MESSAGES=0 turns it off.
+CONTEXT_MESSAGES = int(os.environ.get("CONTEXT_MESSAGES", "2"))
+CONTEXT_MINUTES = int(os.environ.get("CONTEXT_MINUTES", "10"))
+
+CONTEXT_SQL = """
+select a.id as anchor_id, n.id, coalesce(p.display_name, n.author) as author,
+       n.said_at, n.content, n.permalink, s.kind
+from unnest(%(ids)s::uuid[]) as t(anchor_id)
+join utterances a on a.id = t.anchor_id
+join sources s on s.id = a.source_id
+cross join lateral (
+    (select b.* from utterances b
+      where b.source_id = a.source_id
+        and b.said_at < a.said_at
+        and b.said_at > a.said_at - make_interval(mins => %(minutes)s)
+      order by b.said_at desc
+      limit %(around)s)
+    union all
+    (select c.* from utterances c
+      where c.source_id = a.source_id
+        and c.said_at > a.said_at
+        and c.said_at < a.said_at + make_interval(mins => %(minutes)s)
+      order by c.said_at
+      limit %(around)s)
+) n
+left join people p on p.group_id = s.group_id and p.handle_norm = n.author_norm
+"""
+
+
+def with_context(pool, hits: list[dict]) -> list[dict]:
+    """Put each match back in the conversation it came from.
+
+    Returns the matches with their neighbours interleaved: for each match, in
+    the order relevance put them, its little thread in the order it was
+    actually said. A message already shown is not shown twice.
+
+    The neighbours are ordinary citable messages rather than a separate kind
+    of context, which keeps everything downstream unchanged and is also
+    honest: when the real answer turns out to be the line after the one that
+    matched, that line is what should be cited.
+    """
+    if not hits or CONTEXT_MESSAGES <= 0:
+        return hits
+
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                CONTEXT_SQL,
+                {
+                    "ids": [h["id"] for h in hits],
+                    "around": CONTEXT_MESSAGES,
+                    "minutes": CONTEXT_MINUTES,
+                },
+            )
+            neighbours = cur.fetchall()
+
+    around: dict = {}
+    for row in neighbours:
+        around.setdefault(row.pop("anchor_id"), []).append(row)
+
+    out: list[dict] = []
+    seen: set = set()
+    for hit in hits:
+        thread = [*around.get(hit["id"], []), hit]
+        thread.sort(key=lambda m: m["said_at"])
+        for message in thread:
+            if message["id"] not in seen:
+                seen.add(message["id"])
+                out.append(message)
+    return out
 
 
 def search(
@@ -714,7 +796,16 @@ def answer_question(
             },
         }
 
-    hits = search(pool, question, group_id, qvec=qvec)
+    ranked = search(pool, question, group_id, qvec=qvec)
+
+    # Ranked first, then put back in context. Expanding before ranking would
+    # let a neighbour displace a real match; expanding after leaves the
+    # ranking alone and only adds what makes each match readable.
+    #
+    # `ranked` is kept as it was. Without a model the bot quotes one message
+    # verbatim, and that has to be a message the search actually chose, not
+    # whichever line happened to be said before it.
+    hits = with_context(pool, ranked) if ranked else ranked
 
     if not hits:
         # Recorded like any other answer, with no citations, for two reasons.
@@ -747,13 +838,13 @@ def answer_question(
             # the messages; quoting the best one is a worse answer, not no
             # answer, and it is still sourced and still invents nothing.
             print(f"generation failed, quoting the best match instead: {exc}", flush=True)
-            quoted = _quote_best(question, hits)
+            quoted = _quote_best(question, ranked)
             degraded = True
     else:
         # No key at all, or the daily cap is reached. Either way the answer
         # below is a quote and not a written answer, and saying otherwise in
         # the metadata is how a stopgap gets stored as the real thing.
-        quoted = _quote_best(question, hits)
+        quoted = _quote_best(question, ranked)
         degraded = True
 
     if degraded:

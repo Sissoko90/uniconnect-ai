@@ -97,6 +97,11 @@ create index utterances_fts_idx on utterances using gin (fts);
 -- Time filtering for the "what did I miss since Tuesday" feature.
 create index utterances_said_at_idx on utterances (said_at);
 
+-- Reading the messages around a match: the rows in one source just before
+-- and just after a timestamp. Neither of the indexes above serves it, one
+-- ignores the source and the other has author between source_id and said_at.
+create index utterances_source_time_idx on utterances (source_id, said_at);
+
 -- Every answer we produce is stored. Two reasons:
 -- 1. detect repeated questions and reuse the previous answer
 -- 2. produce the usage metrics we show to the judges on Thursday

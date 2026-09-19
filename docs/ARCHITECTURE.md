@@ -57,6 +57,19 @@ The full text configuration is `simple`, not `english` or `french`: the group
 mixes both languages in a single thread, and a language-specific
 configuration would stem one of them into nonsense.
 
+### A match is read in its conversation
+
+Ranking picks messages; a message is not the unit of meaning in a chat. "Oui,
+vendredi 14h" answers a question asked two messages earlier, and on its own
+it says almost nothing. Each match is therefore expanded with the two
+messages either side of it from the same source, within ten minutes, and the
+little threads are handed over in the order they were said.
+
+The expansion happens after ranking, never before, so a neighbour can never
+displace a real match. Neighbours are ordinary citable messages rather than a
+separate class of context: when the answer turns out to be the line after the
+one that matched, that line is what gets cited.
+
 ### The answer is grounded or it is not given
 
 Claude receives the retrieved messages, numbered, and a system prompt that

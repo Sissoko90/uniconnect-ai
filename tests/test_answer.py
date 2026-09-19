@@ -283,3 +283,84 @@ def test_rows_without_a_kind_still_render():
              "content": "hello"}]
 
     assert "Steven" in answer.format_messages(rows)
+
+
+class FakePool:
+    """Just enough of a psycopg pool to run with_context without a database."""
+
+    def __init__(self, rows):
+        self.rows = rows
+        self.executed = []
+
+    def connection(self):
+        return self
+
+    def cursor(self, row_factory=None):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params):
+        self.executed.append(params)
+
+    def fetchall(self):
+        return list(self.rows)
+
+
+def msg(id, minute, content):
+    return {
+        "id": id,
+        "author": "Steven",
+        "said_at": datetime(2026, 9, 18, 15, minute, tzinfo=UTC),
+        "content": content,
+        "permalink": None,
+        "kind": "chat",
+    }
+
+
+def test_a_match_is_read_with_the_messages_around_it():
+    """"Oui, vendredi 14h" answers something asked two messages earlier. The
+    model was being handed the answer without the question and asked what it
+    meant."""
+    hit = msg("b", 10, "Oui, vendredi 14h")
+    neighbours = [
+        {**msg("a", 9, "on fait la répétition quel jour ?"), "anchor_id": "b"},
+        {**msg("c", 11, "parfait, merci"), "anchor_id": "b"},
+    ]
+
+    out = answer.with_context(FakePool(neighbours), [hit])
+
+    # In the order they were said, so the exchange reads as an exchange.
+    assert [m["content"] for m in out] == [
+        "on fait la répétition quel jour ?",
+        "Oui, vendredi 14h",
+        "parfait, merci",
+    ]
+
+
+def test_a_message_is_never_shown_twice():
+    """Two matches a minute apart pull in each other and themselves. Repeating
+    a message would waste the prompt and produce two citation numbers for one
+    message, which is worse."""
+    hits = [msg("b", 10, "second"), msg("a", 9, "first")]
+    neighbours = [
+        {**msg("a", 9, "first"), "anchor_id": "b"},
+        {**msg("b", 10, "second"), "anchor_id": "a"},
+    ]
+
+    out = answer.with_context(FakePool(neighbours), hits)
+
+    assert [m["id"] for m in out] == ["a", "b"]
+
+
+def test_context_can_be_turned_off(monkeypatch):
+    monkeypatch.setattr(answer, "CONTEXT_MESSAGES", 0)
+    hits = [msg("b", 10, "alone")]
+
+    pool = FakePool([])
+    assert answer.with_context(pool, hits) == hits
+    assert pool.executed == [], "the database is not touched when it is off"
