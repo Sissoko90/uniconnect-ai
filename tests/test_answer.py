@@ -251,3 +251,35 @@ def test_ordinary_text_is_left_alone():
     is worse than the problem it solves."""
     for text in ["meti-cohort-1", "check-in at 9", "- a bullet", "a - b"]:
         assert answer.plain_dashes(text) == text
+
+
+def test_a_document_is_labelled_as_one():
+    """Asked to explain the group, the bot read the official hackathon brief
+    as one opinion among nine hundred and wrote that the group had invented
+    the hackathon for itself. A document and a chat message were arriving in
+    the prompt in exactly the same shape, with the document's title sitting
+    in the "from" slot as though a person had said it."""
+    rows = [
+        {"author": "Steven", "said_at": datetime(2026, 9, 18, 15, tzinfo=UTC),
+         "content": "I think the deadline is Friday", "kind": "chat"},
+        {"author": "Hackathon brief", "said_at": datetime(2026, 9, 15, tzinfo=UTC),
+         "content": "Hackathon runs 18 to 24 September", "kind": "document"},
+        {"author": "Open Hour", "said_at": datetime(2026, 9, 16, tzinfo=UTC),
+         "content": "we agreed to move it", "kind": "call"},
+    ]
+
+    block = answer.format_messages(rows)
+
+    assert 'kind="document"' in block
+    assert 'kind="call transcript"' in block
+    # An ordinary message carries no label: the absence is the signal.
+    assert 'kind="chat"' not in block
+
+
+def test_rows_without_a_kind_still_render():
+    """Not every caller selects it, and a missing column must not be an
+    exception in the middle of answering somebody."""
+    rows = [{"author": "Steven", "said_at": datetime(2026, 9, 18, tzinfo=UTC),
+             "content": "hello"}]
+
+    assert "Steven" in answer.format_messages(rows)

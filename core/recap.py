@@ -121,6 +121,16 @@ asterisks, no headings marked with #. Do not number the messages and do not \
 cite them: this is an orientation, not an answer, and citation markers make \
 it unreadable.
 
+Where the group shares a link people keep needing, a recurring meeting, a \
+platform, a form, a support address, give it in full rather than describing \
+it. A link somebody has to scroll back through four hundred messages to find \
+is exactly what this group cannot do.
+
+A message marked kind="document" is a document that was shared here, not \
+somebody's opinion. Where it and a chat message disagree about a rule, a \
+date or a deadline, the document is right and the chat message is probably \
+somebody remembering it wrong.
+
 Say what is in the messages and nothing else. If the history does not show \
 what the group is for, say that instead of inventing a purpose.
 
@@ -146,7 +156,8 @@ order by u.said_at
 """
 
 DIGEST_SQL = """
-select u.id, coalesce(p.display_name, u.author) as author, u.said_at, u.content
+select u.id, coalesce(p.display_name, u.author) as author, u.said_at, u.content,
+       s.kind
 from utterances u
 join sources s on s.id = u.source_id
 left join people p on p.group_id = s.group_id and p.handle_norm = u.author_norm
@@ -282,7 +293,7 @@ def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None =
 
 
 OVERVIEW_SQL = """
-select u.id, coalesce(p.display_name, u.author) as author, u.said_at,
+select u.id, coalesce(p.display_name, u.author) as author, u.said_at, s.kind,
        left(u.content, %(chars)s) as content
 from utterances u
 join sources s on s.id = u.source_id
@@ -296,7 +307,7 @@ limit %(limit)s
 """
 
 
-def overview(pool, group_id: str, lang: str | None = None) -> dict:
+def overview(pool, group_id: str, lang: str | None = None, question: str | None = None) -> dict:
     """What this group is, from all of it, for somebody who cannot follow it.
 
     The third kind of summary, and the one that was missing. A digest covers
@@ -341,10 +352,24 @@ def overview(pool, group_id: str, lang: str | None = None) -> dict:
     chosen = (lang or DIGEST_LANG or "").lower()
     rule = LANGUAGE_RULE.get(chosen, LANGUAGE_RULE[""])
 
+    # The request itself, not just "summarise". Somebody asked for "le résumé
+    # complet de ce qui a dit sur le groupe et les liens du meet passé" and
+    # got the five standard sections with no meeting links anywhere: the
+    # question never reached the model, only the instruction to summarise.
+    asked = (
+        f'Explain this group to a newcomer, from the {len(rows)} messages above.\n\n'
+        f'They asked for it in these words: "{question.strip()}"\n'
+        "If that asks for anything the sections do not already cover, such as "
+        "links, a particular person or a particular subject, add it as a "
+        "final section answering exactly that."
+        if question and question.strip()
+        else f"Explain this group to a newcomer, from the {len(rows)} messages above."
+    )
+
     result["overview"] = _write(
         f"{OVERVIEW_SYSTEM}\n\n{rule}",
         answer_engine.format_messages(rows),
-        f"Explain this group to a newcomer, from the {len(rows)} messages above.",
+        asked,
         # Longer than a digest on purpose. This one is read once, by somebody
         # who has decided to sit down and understand the group, and cutting
         # it to five lines would defeat the whole point of asking.

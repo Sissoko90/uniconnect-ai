@@ -190,7 +190,7 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                 # this person: a digest shows them one day out of months,
                 # and a catch-up shows them nothing once their bookmark is
                 # current. It needs no identity, so it works everywhere.
-                whole = recap.overview(pool, req.group_id, lang=None)
+                whole = recap.overview(pool, req.group_id, lang=None, question=question)
                 text, covering, count = (
                     whole.get("overview"), whole.get("covering"),
                     whole.get("message_count"),

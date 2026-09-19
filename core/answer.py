@@ -58,6 +58,12 @@ owns what, what was agreed - are exactly what you are for; repeating one \
 colleague's judgement of another to a third is not. Say briefly that you do \
 not do that, and offer to answer about the topic instead.
 
+A message marked kind="document" is a document that was shared in the group, \
+not somebody's opinion: a brief, a schedule, a set of rules. Where it and a \
+chat message disagree about a rule, a date or a deadline, prefer the \
+document and say so if it matters. kind="call transcript" is what was said \
+on a call, and it has no speaker labels.
+
 Cite every claim with the number of the message it comes from, like [2]. A \
 sentence carrying a fact with no number on it is a bug.
 
@@ -199,7 +205,7 @@ fts as (
     limit %(candidates)s
 )
 select u.id, coalesce(p.display_name, u.author) as author,
-       u.said_at, u.content, u.permalink,
+       u.said_at, u.content, u.permalink, s.kind,
        coalesce(1.0 / (%(rrf_k)s + vec.rank), 0)
      + coalesce(1.0 / (%(rrf_k)s + fts.rank), 0) as score
 from utterances u
@@ -226,7 +232,7 @@ limit %(limit)s
 
 FTS_ONLY_SQL = """
 select u.id, coalesce(p.display_name, u.author) as author,
-       u.said_at, u.content, u.permalink,
+       u.said_at, u.content, u.permalink, s.kind,
        ts_rank(u.fts, to_tsquery('simple', %(tsq)s)) as score
 from utterances u
 join sources s on s.id = u.source_id
@@ -307,14 +313,32 @@ def format_messages(hits: list[dict]) -> str:
     stops. Any closing tag occurring inside a message is defanged, otherwise a
     member could end the block early and have the rest of their message read
     as if it came from us.
+
+    A row carrying `kind` is labelled with it. A block of a document and a
+    message somebody typed are not equally reliable, and they were arriving
+    indistinguishable.
     """
     lines = []
     for i, h in enumerate(hits, start=1):
         when = h["said_at"].strftime("%d %b %Y at %H:%M UTC")
         content = h["content"].strip().replace("</group_messages>", "</group_messages >")
+
+        # A document and a chat message are not the same kind of evidence and
+        # were being presented identically, with the document's title sitting
+        # in the "from" slot as though a person had said it. Asked to explain
+        # the group, the model read the official hackathon brief as one more
+        # opinion among nine hundred and wrote that the group had invented
+        # the hackathon for itself.
+        #
+        # The kind is only rendered when it is known, so callers that do not
+        # select it are unaffected.
+        kind = h.get("kind")
+        label = {"document": "document", "call": "call transcript"}.get(kind)
+        origin = f' kind="{label}"' if label else ""
+
         lines.append(
-            f'<message id="{i}" from="{display_author(h["author"])}" at="{when}">\n'
-            f"{content}\n</message>"
+            f'<message id="{i}" from="{display_author(h["author"])}" at="{when}"'
+            f"{origin}>\n{content}\n</message>"
         )
     body = "\n".join(lines)
     return f"<group_messages>\n{body}\n</group_messages>"
