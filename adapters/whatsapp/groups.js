@@ -50,28 +50,37 @@ if (PAIR_NUMBER && (PAIR_NUMBER.length < 8 || PAIR_NUMBER.length > 15)) {
 
 const AUTH_DIR = 'auth_info';
 
-/** Is there a finished, usable session on disk? */
-function hasRealSession() {
+/** The number a session on disk belongs to, or null if there is no session. */
+function sessionNumber() {
   try {
     const creds = JSON.parse(readFileSync(`${AUTH_DIR}/creds.json`, 'utf8'));
-    return Boolean(creds.registered);
+    if (!creds.registered) return null;          // never finished pairing
+    return String(creds.me?.id || '').split(/[:@]/)[0] || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-// A failed pairing attempt leaves credentials behind that are worse than
-// nothing: the next run finds them, tries to log in as whatever number was
-// given last time, is rejected, and the socket is dead before the new pairing
-// request can even be sent. The error then points at the new number, which is
-// fine, instead of the old one, which is not there any more to be seen.
+// Asking to pair a number means starting fresh with that number. Anything
+// already on disk is kept only if it is a finished session for the very same
+// one; everything else is cleared.
 //
-// This is deleted automatically rather than left as a step to remember,
-// because it was forgotten three times in a row, and a half-finished attempt
-// has no value worth keeping.
-if (PAIR_NUMBER && existsSync(AUTH_DIR) && !hasRealSession()) {
-  rmSync(AUTH_DIR, { recursive: true, force: true });
-  console.log('\n  Cleared a half-finished pairing attempt.');
+// Half-finished credentials are worse than none: the next run finds them,
+// tries to log in instead of registering, is rejected, and the socket is dead
+// before the new pairing request can be sent. The error then names the number
+// you just typed while the cause is the one from last time, which is no
+// longer visible anywhere. That cost three attempts to see, so it is done
+// here rather than left as a step to remember.
+if (PAIR_NUMBER && existsSync(AUTH_DIR)) {
+  const existing = sessionNumber();
+  if (existing !== PAIR_NUMBER) {
+    rmSync(AUTH_DIR, { recursive: true, force: true });
+    console.log(
+      existing
+        ? `\n  Cleared a session belonging to ${existing}.`
+        : '\n  Cleared a half-finished pairing attempt.'
+    );
+  }
 }
 
 const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
