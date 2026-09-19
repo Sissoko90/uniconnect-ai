@@ -33,6 +33,11 @@ const sock = makeWASocket({
   auth: state,
   // With a pairing code the QR is noise: it scrolls the code out of view.
   printQRInTerminal: false,
+  // Baileys cycles a few QR references and then gives up with "QR refs
+  // attempts ended". The default leaves about two minutes to find the right
+  // screen on the phone and type eight characters, which is not enough the
+  // first time somebody does it. Three minutes per reference is.
+  qrTimeout: 180_000,
 });
 sock.ev.on('creds.update', saveCreds);
 
@@ -41,10 +46,16 @@ if (PAIR_NUMBER && !alreadyPaired) {
   await new Promise((r) => setTimeout(r, 4000));
   try {
     const code = await sock.requestPairingCode(PAIR_NUMBER);
-    console.log('\n  Pairing code:  ' + code.match(/.{1,4}/g).join('-') + '\n');
-    console.log('  On the bot phone: WhatsApp, Settings, Linked devices,');
-    console.log('  Link a device, then "Link with phone number instead".');
-    console.log('  Type the code above. It expires after a minute or two.\n');
+    // Printed twice on purpose: grouped so it can be read off the screen,
+    // and plain so nobody types the hyphen. WhatsApp wants the eight
+    // characters and nothing else.
+    console.log('\n  Pairing code:  ' + code.match(/.{1,4}/g).join(' '));
+    console.log('  Type exactly:  ' + code + '   (eight characters, no dash)\n');
+    console.log('  On the bot phone, in this order:');
+    console.log('    WhatsApp, Settings, Linked devices, Link a device,');
+    console.log('    then "Link with phone number instead", then type it.\n');
+    console.log('  Be on that screen before running this: the code lasts about');
+    console.log('  three minutes, then the connection closes and you start over.\n');
   } catch (error) {
     console.error('Could not request a pairing code:', error.message);
     console.error('Check that PAIR_NUMBER is the bot number in full, digits only,');
@@ -63,8 +74,16 @@ sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
 
   if (connection === 'close') {
     const reason = lastDisconnect?.error?.output?.statusCode;
-    console.error(`\nConnection closed (${reason ?? 'unknown'}).`);
-    console.error('If pairing did not complete, delete auth_info/ and try again.\n');
+    if (reason === 408) {
+      console.error('\n  The code expired before it was entered.');
+      console.error('  Open WhatsApp, Settings, Linked devices, Link a device,');
+      console.error('  "Link with phone number instead" FIRST, then run this again');
+      console.error('  and type the code straight away.\n');
+    } else {
+      console.error(`\nConnection closed (${reason ?? 'unknown'}).`);
+    }
+    console.error('  rm -rf auth_info   before retrying, a half-finished');
+    console.error('  attempt blocks the next one.\n');
     process.exit(1);
   }
 
