@@ -366,8 +366,18 @@ sudo -u uniconnect npm run avatar
 sudo systemctl start uniconnect-bot
 ```
 
-Sets the bot's WhatsApp profile picture to the project logo. Run it once,
-after pairing. It is what 153 people see next to every answer and at the top
+Sets the bot's WhatsApp profile picture to the project logo, and its name
+when `BOT_NAME` is given:
+
+```bash
+BOT_NAME="UNICONNECT BOT" sudo -u uniconnect npm run avatar
+```
+
+The programme's organiser asked every team to name its bot `<TEAM NAME> BOT`
+so that members can tell them apart while they test and vote, and a bot
+nobody can find in their chat list is a bot nobody votes for.
+
+Run it once, after pairing. It is what 153 people see next to every answer and at the top
 of the private chat, a default grey silhouette reads as an unfinished script.
 
 **Stop the worker first.** WhatsApp allows one connection per linked device,

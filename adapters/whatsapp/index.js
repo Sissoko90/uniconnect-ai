@@ -73,6 +73,19 @@ const ALERT_INTERVAL_MS = Number(process.env.ALERT_INTERVAL_MINUTES || 5) * 60_0
 // missed, and start the day with it.
 const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC || 7);
 
+// Whether the bot is allowed to write in the group at all, uninvited.
+//
+// The daily digest and the one-off introduction are the only two things it
+// says without being asked, and both go to everybody. The group's own
+// administrator has asked that bots not be deployed without telling her
+// first, and members are asking for fewer bot messages in the main thread
+// while they test, so this has to be something a human turns on knowingly
+// rather than something that happens at 07:00 because nobody thought about
+// it.
+//
+// Answers to @ask are unaffected: those were invited.
+const POSTS_IN_GROUP = process.env.DIGEST_ENABLED !== 'false';
+
 // A number that answers in 200 milliseconds, every time, at four in the
 // morning, is a number Meta blocks. The pause costs nothing and it is the
 // cheapest insurance we have against losing the account outright.
@@ -549,7 +562,10 @@ async function checkGroupJid(sock) {
     // --group-id the parser was given, and there is no way to check that
     // from here: both values are valid on their own and a mismatch simply
     // means the questions and the history are in two different groups.
-    console.log(`reading group "${match.subject}" as ${GROUP_ID}`);
+    console.log(
+      `reading group "${match.subject}" as ${GROUP_ID}, ` +
+        `${POSTS_IN_GROUP ? 'will post the morning digest' : 'silent in the group'}`
+    );
     return;
   }
 
@@ -697,6 +713,7 @@ async function maybePostDigest(sock) {
   const today = now.toISOString().slice(0, 10);
   const state = digestState();
 
+  if (!POSTS_IN_GROUP) return;
   if (now.getUTCHours() !== DIGEST_HOUR_UTC) return;
   if (state.day === today) return;
 

@@ -1,7 +1,13 @@
 /**
- * Set the bot's WhatsApp profile picture to the project logo, then exit.
+ * Set the bot's WhatsApp profile picture and name, then exit.
  *
  *   npm run avatar
+ *   BOT_NAME="UNICONNECT BOT" npm run avatar
+ *
+ * The name matters as much as the picture here. The programme's organiser
+ * has asked every team to name its bot "<TEAM NAME> BOT", so that members
+ * can tell them apart while they test and vote. A bot that ignores that
+ * instruction is the one nobody can find in their chat list.
  *
  * Run once, after pairing. It is what 153 people actually see: the avatar next
  * to every answer, in the group list, and at the top of the private chat where
@@ -49,6 +55,16 @@ sock.ev.on('connection.update', async ({ connection, qr }) => {
   if (!me) {
     console.error('Connected but no account id. Try again.');
     process.exit(1);
+  }
+
+  const name = (process.env.BOT_NAME || '').trim();
+  if (name) {
+    try {
+      await sock.updateProfileName(name);
+      console.log(`Name set to "${name}".`);
+    } catch (error) {
+      console.error('Could not set the name:', error.message);
+    }
   }
 
   try {
