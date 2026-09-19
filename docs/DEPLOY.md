@@ -19,18 +19,18 @@ You need four things. Get them now, not halfway through.
 | | |
 |---|---|
 | A server | Ubuntu 22.04 or newer, 2 GB RAM, root or sudo access |
-| A phone number for the bot | **Not** your personal one. A second SIM or a spare number — the account gets linked to it |
+| A phone number for the bot | **Not** your personal one. A second SIM or a spare number, the account gets linked to it |
 | Three API keys | Anthropic, Voyage, Groq |
 | A domain name (optional) | Only needed for the web page over HTTPS |
 
 Get the keys:
 
-- **Anthropic** — console.anthropic.com → API Keys. Starts `sk-ant-`. Put a
+- **Anthropic**, console.anthropic.com → API Keys. Starts `sk-ant-`. Put a
   spend limit on it in the console. This is the only one that costs real money.
-- **Voyage** — dash.voyageai.com → API Keys. Starts `pa-`. Add a payment
+- **Voyage**, dash.voyageai.com → API Keys. Starts `pa-`. Add a payment
   method: the first 200M tokens are free either way, but without one you are
   capped at 3 requests a minute and ingestion crawls.
-- **Groq** — console.groq.com → API Keys. Starts `gsk_`. For voice notes and
+- **Groq**, console.groq.com → API Keys. Starts `gsk_`. For voice notes and
   call recordings.
 
 ---
@@ -53,7 +53,7 @@ curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker "$USER"
 ```
 
-**Log out and back in** — the group change only applies to a new session.
+**Log out and back in**, the group change only applies to a new session.
 
 ```bash
 exit
@@ -118,7 +118,7 @@ openssl rand -hex 32     # for WORKER_TOKEN
 
 `WORKER_TOKEN` is the shared secret between the worker and the API. Most
 endpoints read or write the group's private messages and are refused without
-it. Keep it — you will paste the same value into the worker in step 8.
+it. Keep it, you will paste the same value into the worker in step 8.
 
 `.env` is git-ignored. Never commit it, never paste it into a chat.
 
@@ -144,7 +144,7 @@ Six tables: `sources`, `utterances`, `answers`, `people`, `mentions`,
 `user_state`.
 
 > `db/schema.sql` is applied **once**, when the data volume is created. If you
-> edit it later, nothing happens on a running database — see *Resetting* at the
+> edit it later, nothing happens on a running database, see *Resetting* at the
 > end.
 
 ---
@@ -203,7 +203,7 @@ python ingestion/parse_whatsapp.py /tmp/export/*.txt \
 `--tz` is the timezone of the phone the export came from; everything is stored
 in UTC. Running the same export twice is safe: the second run reports `0 new`.
 
-Then delete the export from the server — it is 153 people's private messages
+Then delete the export from the server, it is 153 people's private messages
 and it has served its purpose:
 
 ```bash
@@ -278,7 +278,7 @@ Once linked, the command prints every group the number is in:
 ```
 
 Copy that line into `.env`. If no group is listed, the number has not been
-added to the group yet — do that first, then re-run.
+added to the group yet, do that first, then re-run.
 
 Without `GROUP_JID` the worker exits immediately and systemd restarts it in a
 loop; the log says `GROUP_JID is not set` on every attempt.
@@ -300,7 +300,7 @@ npm run avatar
 
 Sets the bot's WhatsApp profile picture to the project logo. Run it once,
 after pairing. It is what 153 people see next to every answer and at the top
-of the private chat — a default grey silhouette reads as an unfinished script.
+of the private chat, a default grey silhouette reads as an unfinished script.
 
 If it fails, set the picture by hand on the bot's phone using
 `assets/logo.png`. It is cosmetic; it does not block anything.
@@ -355,7 +355,7 @@ sudo systemctl status uniconnect-bot
 `node` directly, not `npm start`: npm forks node, so systemd watches the
 wrapper instead of the process that matters and signals do not travel cleanly
 through it. npm also wants a writable `HOME`, which a service account does not
-necessarily have — that shows up as a bare `status=1/FAILURE` with nothing
+necessarily have, that shows up as a bare `status=1/FAILURE` with nothing
 useful in the log.
 
 The service runs as `uniconnect`, so that user must own the directory:
@@ -366,7 +366,7 @@ sudo chown -R uniconnect:uniconnect /opt/uniconnect-ai/adapters/whatsapp
 ```
 
 Without it the service fails with `status=217/USER`. Run the worker's own
-commands as that user too — `sudo -u uniconnect npm run avatar` — or you will
+commands as that user too, `sudo -u uniconnect npm run avatar`, or you will
 put root-owned files back into a directory the service cannot read.
 
 Watch it:

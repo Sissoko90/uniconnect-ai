@@ -5,7 +5,7 @@
 # UniConnect AI
 
 **An AI assistant for busy groups.** It reads the group's chats and call
-recordings, then answers members directly — with a citation, or not at all.
+recordings, then answers members directly, with a citation, or not at all.
 
 [![CI](https://github.com/Sissoko90/uniconnect-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/Sissoko90/uniconnect-ai/actions/workflows/ci.yml)
 [![Security](https://github.com/Sissoko90/uniconnect-ai/actions/workflows/security.yml/badge.svg)](https://github.com/Sissoko90/uniconnect-ai/actions/workflows/security.yml)
@@ -33,8 +33,7 @@ rewatch the recording. Information gets lost between the two.
 Awa:  @ask where are the session recordings?
 
 Bot:    The recordings are in the shared drive, posted by Nadia Traoré on
-        18 September [1].
-        — Nadia Traoré, 18 Sep 2026
+        18 September [1]., Nadia Traoré, 18 Sep 2026
 ```
 
 - **Ask anything.** Answers come from the group's own history, with the
@@ -54,7 +53,7 @@ Bot:    The recordings are in the shared drive, posted by Nadia Traoré on
 
 In the group the bot writes only when mentioned, when a question is a
 duplicate (once per topic), or for the daily digest. In a direct message it
-always answers. The product solves a noise problem — it must not add to it.
+always answers. The product solves a noise problem, it must not add to it.
 
 ## How it works
 
@@ -102,7 +101,7 @@ Step by step, including call recordings and deployment behind nginx:
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /ask` | answer a question, with citations — **the frozen contract** |
+| `POST /ask` | answer a question, with citations, **the frozen contract** |
 | `POST /catchup` | what one member missed, and move their bookmark |
 | `POST /people` | resolve a handle to a name |
 | `POST /feedback` | rate the last answer a member received |
@@ -128,8 +127,7 @@ Calling these from a bot: **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 
 <img src="assets/logo.png" alt="" width="64" align="left" hspace="16">
 
-The mark is a speech bubble with several voices converging to a single point —
-which is the product in one image: a lot of people talking, one answer that
+The mark is a speech bubble with several voices converging to a single point, which is the product in one image: a lot of people talking, one answer that
 cites them.
 
 The same three colours run through the web page, the bot's avatar and this

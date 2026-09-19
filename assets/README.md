@@ -4,7 +4,7 @@
 WhatsApp profile picture, and on the web page.
 
 There is a second copy at `core/static/logo.png`. That one is served by the
-API, and the API image is built from the `core/` directory alone — it cannot
+API, and the API image is built from the `core/` directory alone, it cannot
 reach files above it. Twenty-five kilobytes duplicated is cheaper than
 rebuilding the container's build context the week we ship.
 

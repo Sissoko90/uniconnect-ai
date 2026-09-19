@@ -64,7 +64,7 @@ The database alone, on purpose: if the schema has an error you find out now
 instead of debugging three containers at once.
 
 `db/schema.sql` is applied **once**, when the data volume is created. Editing
-it later changes nothing on a running database — see *Resetting* below.
+it later changes nothing on a running database, see *Resetting* below.
 
 Check it landed:
 
@@ -76,7 +76,7 @@ Six tables: `sources`, `utterances`, `answers`, `people`, `mentions`,
 `user_state`.
 
 > **Port 5432 already in use?** Something else on the machine is running
-> Postgres. Set `DB_PORT=5433` in `.env` — it moves only the host side, the
+> Postgres. Set `DB_PORT=5433` in `.env`, it moves only the host side, the
 > containers still talk to each other on 5432.
 
 ## 4. Start the API
@@ -89,7 +89,7 @@ curl localhost:8000/health
 Expected: `{"status":"ok","utterances":0}`.
 
 The API is bound to `127.0.0.1` and is not reachable from outside the
-machine. That is deliberate — nginx puts it on the internet, nothing else.
+machine. That is deliberate, nginx puts it on the internet, nothing else.
 
 ## 5. Load a conversation
 
@@ -113,7 +113,7 @@ python ingestion/parse_whatsapp.py "chat.txt" --group-id meti-cohort-1 \
 ```
 
 `--tz` is the timezone of the phone the export came from; timestamps are
-stored in UTC. Running the same export twice is safe — the second run reports
+stored in UTC. Running the same export twice is safe, the second run reports
 `0 new` and changes nothing.
 
 Ask it something:
@@ -137,7 +137,7 @@ Costs money, so it is a separate pass from parsing and only ever touches rows
 with no vector. Safe to interrupt: each batch is committed as it completes, and
 re-running picks up where it stopped.
 
-Check it worked — `embeddings` should be `true` and the count should match:
+Check it worked, `embeddings` should be `true` and the count should match:
 
 ```bash
 curl -s localhost:8000/health
@@ -170,7 +170,7 @@ python ingestion/embed.py    # transcripts need embedding too
 ```
 
 A file already in an accepted audio format and under 20 MB is uploaded
-untouched — a voice note or a short recording needs nothing installed.
+untouched, a voice note or a short recording needs nothing installed.
 
 ```bash
 sudo apt install ffmpeg      # only for video, or recordings over 20 MB
@@ -191,7 +191,7 @@ curl -s localhost:8000/recap/latest/meti-cohort-1
 | Endpoint | What it is for |
 |---|---|
 | `POST /ask` | answer a question, with citations. The frozen contract. |
-| `POST /messages` | every message the worker sees — what keeps the bot current |
+| `POST /messages` | every message the worker sees, what keeps the bot current |
 | `POST /catchup` | what one person missed; moves their bookmark forward |
 | `GET /digest/<group>` | five lines on the last 24 hours |
 | `GET /recap/latest/<group>` | decisions and action items from the last call |
@@ -211,7 +211,7 @@ sudo ufw allow 22,80,443/tcp
 sudo ufw enable
 ```
 
-nginx in front of the API. **Expose the public paths only** — the rest of the
+nginx in front of the API. **Expose the public paths only**, the rest of the
 API reads and writes a private group's messages, and the worker reaches it on
 loopback without going through nginx at all:
 
@@ -234,12 +234,12 @@ server {
 ```
 
 `/etc/nginx/proxy_params` ships with nginx and sets the forwarding headers.
-Add `proxy_read_timeout 120s;` to the `/ask` block — generating an answer can
+Add `proxy_read_timeout 120s;` to the `/ask` block, generating an answer can
 take a while.
 
 An earlier version of this file proxied `location /` to the whole API. That
-would have put `/alerts` — who was named in the group, and what was said to
-them — on the open internet. Those endpoints now also require the worker
+would have put `/alerts`, who was named in the group, and what was said to
+them, on the open internet. Those endpoints now also require the worker
 token, so this is the second lock rather than the only one.
 
 ```bash
@@ -269,4 +269,4 @@ stop doing this and write a migration instead.
 | Schema change had no effect | The volume already existed. See *Resetting*. |
 | `could not create extension "vector"` | Wrong image. It must be `pgvector/pgvector:pg16`. |
 | Parser prints 0 messages | Not a WhatsApp export, or media-only. Check with `--dry-run`. |
-| Dates look months off | Wrong `--tz`, or an ambiguous export — the parser warns when it cannot tell. |
+| Dates look months off | Wrong `--tz`, or an ambiguous export, the parser warns when it cannot tell. |

@@ -44,8 +44,8 @@ During the hackathon (18–24 September 2026) we aim to answer within a day.
   each, a daily cap across everybody, and an identical repeat within thirty
   seconds answered from the database for nothing.
 - **The public surface is four paths.** `/`, `/ask`, `/metrics/page` and
-  `/health`. Everything else — the group's messages, voice notes, mention
-  alerts, catch-up, digests, recaps — requires a shared `WORKER_TOKEN` and is
+  `/health`. Everything else, the group's messages, voice notes, mention
+  alerts, catch-up, digests, recaps, requires a shared `WORKER_TOKEN` and is
   refused without it. An unset token disables those endpoints rather than
   opening them.
 - **A leaked key is rotated, not deleted.** Removing a secret in a later
@@ -70,7 +70,7 @@ is now fixed.
 
 **CodeQL only runs while the repository is public.** On a private repository
 it can analyse the code but not upload its findings without GitHub Advanced
-Security, so the job is skipped rather than left permanently red — a security
+Security, so the job is skipped rather than left permanently red, a security
 workflow everyone has learned to ignore protects nothing. Making the
 repository public turns it on, and the submission rules ask for an accessible
 repository anyway.
@@ -93,7 +93,7 @@ endpoints added after the guardrails were written:
   asking for a digest in a loop. `limits.assert_budget` now runs on all of
   them.
 - **`/alerts/sent` accepted any ids from anyone**, which let a caller mark
-  alerts delivered without delivering them — silently suppressing the
+  alerts delivered without delivering them, silently suppressing the
   notifications. Now behind the worker token.
 
 The lesson we are keeping: a guardrail written for one endpoint is not a
@@ -106,7 +106,7 @@ Stated plainly rather than left for someone to discover:
 
 - **The loop guard is only half in our hands.** The API answers an identical
   repeat for free, but a loop between two bots that varies its wording is
-  stopped by the worker refusing to answer bots — not by us.
+  stopped by the worker refusing to answer bots, not by us.
 - **No database backups.** If the VPS is lost, the history and the usage
   metrics go with it.
 - **No audit log.** We record every answer, but not who read what.
@@ -114,5 +114,5 @@ Stated plainly rather than left for someone to discover:
 ## Handling the exports
 
 The `.zip` exports are the group's private messages. They belong on the VPS
-and in the database — not in the repository, not in a shared drive, not in a
+and in the database, not in the repository, not in a shared drive, not in a
 chat message. `git check-ignore` them before any commit if you are unsure.

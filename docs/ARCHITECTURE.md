@@ -33,8 +33,8 @@ A chat message and fifteen seconds of a call transcript are both an
 share a table, one search covers both, and an answer can cite a call and a
 chat in the same breath without the retrieval code knowing the difference.
 
-The cost is that a transcript has no real author — Whisper does not label
-speakers — so a transcript block is attributed to the call itself. Guessing
+The cost is that a transcript has no real author, Whisper does not label
+speakers, so a transcript block is attributed to the call itself. Guessing
 which member spoke would be worse than not naming one.
 
 ### Search is hybrid, not vector-only
@@ -47,7 +47,7 @@ reciprocal rank fusion:
 | pgvector cosine similarity | meaning, paraphrases, questions asked in another language | exact names, acronyms, project names |
 | Postgres full text (`simple`) | exact tokens: *UniPods*, *METI*, *Baileys*, a phone number | anything worded differently |
 
-Embeddings alone fail on precisely what this group asks about — names of
+Embeddings alone fail on precisely what this group asks about, names of
 people, tools and sessions. RRF is used rather than score blending because
 cosine distance and `ts_rank` are not on comparable scales, and calibrating
 them would be a day of work we did not have.
@@ -68,7 +68,7 @@ trusted again.
 
 ### Silent in the group, talkative in private
 
-The API never decides to speak — it only answers when asked. The rule lives
+The API never decides to speak, it only answers when asked. The rule lives
 in the worker: in the group it writes when mentioned, when a question is a
 duplicate (once per topic), or for the daily digest. In a private chat it
 always answers.
@@ -96,7 +96,7 @@ Three details that are easy to get wrong and expensive to fix later:
   Hashed, because a btree entry is capped near 2.7 kB and a long pasted
   message would exceed it. Re-running the parser is therefore free.
 - **One chat source per group.** Otherwise each re-ingest creates a new
-  source, the de-duplication index — which is scoped to a source — sees
+  source, the de-duplication index, which is scoped to a source, sees
   nothing, and the entire history is inserted again.
 
 ## The frozen contract
@@ -120,7 +120,7 @@ worker is in [INTEGRATION.md](INTEGRATION.md).
 **Baileys instead of the official WhatsApp API.** The official Groups API
 caps a group at 8 participants, which makes it unusable for a group of 153.
 Baileys connects as a linked device instead. The price is that the number can
-be blocked by Meta if it behaves like a spammer — another reason the silence
+be blocked by Meta if it behaves like a spammer, another reason the silence
 rule is not negotiable.
 
 **The web page is served by the API, not hosted separately.** One file, no
@@ -131,7 +131,7 @@ input box.
 
 **Postgres for vectors instead of a vector database.** One database to
 operate, one backup to take, and full text search in the same query as the
-vector search. At our scale — tens of thousands of messages — a dedicated
+vector search. At our scale, tens of thousands of messages, a dedicated
 vector store would buy nothing and cost a service to run.
 
 **Everything on loopback.** Postgres and the API are bound to `127.0.0.1`.
@@ -160,7 +160,7 @@ as "this was already answered" in front of the group.
 **Limits are measured in the database, not in memory.** Twenty questions per
 person per hour, a daily spend cap across everybody computed from the token
 counts the API actually reported, and an identical repeat from the same
-person within thirty seconds answered straight from the table — which is what
+person within thirty seconds answered straight from the table, which is what
 makes a loop between two bots free rather than expensive.
 
 Reaching the cap does not silence the bot. It drops to search without
@@ -168,7 +168,7 @@ generation and says so on `meta.degraded`. On the day the group votes, a
 blunter answer is worth more than no answer.
 
 **Answers that found nothing are recorded too.** Otherwise the coverage
-figure is a flattering 100% — and the hourly limit could be walked straight
+figure is a flattering 100%, and the hourly limit could be walked straight
 past by asking things that match nothing.
 
 ## What is deliberately not here

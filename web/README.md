@@ -5,7 +5,7 @@ served by the API at `/`.
 
 It was put there rather than deployed separately on purpose. It is one file
 with no build step, it ships in the same container as everything else, and it
-calls the API on its own origin — so there is no second deployment to keep in
+calls the API on its own origin, so there is no second deployment to keep in
 sync, and no Vercel account in the critical path two days before submission.
 
 It is plain HTML with no framework. If we want it on Vercel later the file

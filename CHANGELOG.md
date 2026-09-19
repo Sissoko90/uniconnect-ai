@@ -66,7 +66,7 @@ Notable changes to UniConnect AI. Format follows
   never saw a card boundary and attributed all four numbers to the last
   contact.
 - **Re-running the parser duplicated the entire history.** Each run created a
-  new source, so the de-duplication index — scoped to a source — never fired.
+  new source, so the de-duplication index, scoped to a source, never fired.
   A group now has exactly one chat source.
 - **`ivfflat` on an empty table.** Replaced with HNSW, which is correct from
   the first row.
@@ -78,7 +78,7 @@ Notable changes to UniConnect AI. Format follows
   git-ignored.**
 - **Direct messages would never have worked.** The integration notes told the
   worker to send `msg.key.remoteJid` as `group_id`, which in a direct message
-  is the person, not the group — so every private question would have searched
+  is the person, not the group, so every private question would have searched
   an empty history and answered "I could not find anything". `group_id` is now
   documented as always being the group's JID, with a separate `private` flag.
 - **A private question could have been announced to the group.** Duplicate
@@ -104,7 +104,7 @@ Notable changes to UniConnect AI. Format follows
   note in an accepted format under 20 MB is now uploaded untouched.
 - **The API crash-looped when the database was unreachable.** Startup waited
   on the connection pool and raised, so with `restart: unless-stopped` the
-  container restarted forever with no way in to diagnose it — the opposite of
+  container restarted forever with no way in to diagnose it, the opposite of
   what the code comment claimed. It now always starts, reports 503 from
   `/health` within two seconds while the database is down, and recovers on
   its own without a restart. Caught by CI, not by reading the code.

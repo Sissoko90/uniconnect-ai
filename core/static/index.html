@@ -86,8 +86,8 @@
     <h1>UniConnect AI</h1>
   </header>
   <p class="tagline">
-    Ask the group's own history. Every answer cites who said it and when —
-    and if nothing in the group answers your question, it says so.
+    Ask the group's own history. Every answer cites who said it and when.
+    If nothing in the group answers your question, it says so.
   </p>
 
   <form id="f">
@@ -104,8 +104,11 @@
   <div id="out" hidden></div>
 
   <footer>
-    Same API as the WhatsApp bot · <a href="/metrics/page">usage</a> ·
-    <a href="/docs">API</a>
+    <!-- No link to /docs: nginx exposes five public paths and that is not one
+         of them, so the link would 404 for every visitor. The API browser is
+         reachable over an SSH tunnel by whoever needs it. -->
+    Same bot that answers in WhatsApp ·
+    <a href="/metrics/page">see how the group is using it</a>
   </footer>
 </main>
 

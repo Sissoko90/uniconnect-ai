@@ -17,7 +17,7 @@ blocks anybody else.
 
 | Area | Owner | Touch it only after asking |
 |---|---|---|
-| `db/schema.sql` | Makan | yes — everything depends on its shape |
+| `db/schema.sql` | Makan | yes, everything depends on its shape |
 | `ingestion/` | Makan | no |
 | `core/` | Jediel | no |
 | `adapters/whatsapp/`, `web/` | Liza | yes |
@@ -51,7 +51,7 @@ pytest
 
 Both run in CI on every push and pull request, along with the schema applied
 from scratch and the API image built. If CI is red, fix it before starting
-the next thing — a red pipeline that everyone has learned to ignore is worse
+the next thing, a red pipeline that everyone has learned to ignore is worse
 than no pipeline.
 
 ## Writing code here
@@ -63,7 +63,7 @@ than no pipeline.
 - **A bug you fix gets a test**, named after the failure rather than the
   function. Three of the tests in `tests/` are regressions of bugs that
   reached real data.
-- **Never invent an answer** — in code or in prompts. If the sources do not
+- **Never invent an answer**, in code or in prompts. If the sources do not
   support it, say so.
 
 ## Commits

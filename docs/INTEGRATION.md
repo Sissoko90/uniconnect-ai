@@ -2,7 +2,7 @@
 
 For the Baileys worker in `adapters/whatsapp/`. The API runs on
 `http://127.0.0.1:8000` on the same machine, so no auth and no TLS between
-the two — nginx only exposes what we choose to expose.
+the two, nginx only exposes what we choose to expose.
 
 Everything below is live today. You can build against it before the keys are
 in place: without them the API still answers, from full text search instead of
@@ -10,7 +10,7 @@ Claude, with the same response shape.
 
 ## Every call needs the token
 
-Most of this API is not public — it reads and writes a private group's
+Most of this API is not public, it reads and writes a private group's
 messages. Send the shared secret on **every** request except `/ask`:
 
 ```js
@@ -45,7 +45,7 @@ group has a noise problem and we must not add to it.
 ## First: send us every message
 
 Before anything else. Without this the bot answers from the last chat export
-and gets more wrong every day — on Monday it would not know what was said on
+and gets more wrong every day, on Monday it would not know what was said on
 Sunday.
 
 Call this for **every** message the worker sees, mentioned or not. That is the
@@ -67,7 +67,7 @@ await fetch("http://127.0.0.1:8000/messages", {
 });
 ```
 
-Safe to call twice with the same message — duplicates are dropped — so a
+Safe to call twice with the same message, duplicates are dropped, so a
 reconnect that replays history does no harm. It takes a list, so you can batch.
 
 `author_name` matters more than it looks: it is the only source of real names
@@ -77,7 +77,7 @@ bot stops citing `+229…42`.
 ## Voice notes
 
 The feature nobody else will have. A voice note is unsearchable and gone if
-you did not listen in the hour — send us the audio and it becomes an ordinary,
+you did not listen in the hour, send us the audio and it becomes an ordinary,
 citable message attributed to whoever recorded it.
 
 ```js
@@ -98,13 +98,13 @@ if (msg.message?.audioMessage) {
 }
 ```
 
-Takes a few seconds — do not make the group wait on it. `empty: true` means
+Takes a few seconds, do not make the group wait on it. `empty: true` means
 there were no intelligible words; nothing was stored and nothing needs saying.
 
 ## Mention alerts
 
 The one place the bot comes to somebody instead of waiting. Poll every few
-minutes and send each alert as a **direct message** — never in the group.
+minutes and send each alert as a **direct message**, never in the group.
 
 ```js
 const { alerts } = await (await fetch(`http://127.0.0.1:8000/alerts/${GROUP}`)).json();
@@ -124,7 +124,7 @@ await fetch("http://127.0.0.1:8000/alerts/sent", {
 
 The API already filters hard: only people who have used the bot before, only
 after a 20 minute grace period, only if they have not spoken since, and never
-the same mention twice. You do not need to add rules — send what it gives you.
+the same mention twice. You do not need to add rules, send what it gives you.
 
 For this to work at all, pass `mentions` on `/messages`:
 `mentions: msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || []`.
@@ -136,7 +136,7 @@ GET /timeline/<group_id>
 → { timeline, facts, empty }
 ```
 
-`timeline` is monospace text — send it inside triple backticks and WhatsApp
+`timeline` is monospace text, send it inside triple backticks and WhatsApp
 lays it out. The dates are extracted by the model but drawn in code, so
 nothing appears that was not in a message, and each line keeps its citation.
 `empty: true` means the group has fixed no dates worth showing.
@@ -163,7 +163,7 @@ const { answer, sources, meta } = await r.json();
 > in.** It says *which history to search*, not where to reply. In a direct
 > message `msg.key.remoteJid` is the person, so sending that would search a
 > history with nothing in it and the bot would answer "I could not find
-> anything" to every private question — the half of the product that is
+> anything" to every private question, the half of the product that is
 > supposed to be the most useful. Put the group's JID in a constant and send
 > it every time.
 >
@@ -172,13 +172,11 @@ const { answer, sources, meta } = await r.json();
 > announce to everyone that somebody asked something in private.
 
 `sources` is an array of `{author, said_at, excerpt, permalink}`. Show at
-least the first one — a citation is what separates this from a chatbot that
+least the first one, a citation is what separates this from a chatbot that
 makes things up. Something like:
 
 ```
-{answer}
-
-— {sources[0].author}, {date of sources[0].said_at}
+{answer}, {sources[0].author}, {date of sources[0].said_at}
 ```
 
 `meta.duplicate === true` means this was already answered; `meta.answered_at`
@@ -202,7 +200,7 @@ POST /catchup  { user, group_id, question? }
 Same rule as above: `group_id` is the group's JID, `user` is the person's.
 
 Send `summary` as-is. It is written for a phone. `first_time: true` means we
-had no bookmark for this person and summarised the last 48 hours — worth
+had no bookmark for this person and summarised the last 48 hours, worth
 saying so ("here is the last two days") rather than implying we knew.
 
 Calling this **moves their bookmark forward**, so never call it to preview.
@@ -220,14 +218,14 @@ POST /people {
 }
 ```
 
-Send it whenever you see a name you have not sent before — a small in-memory
+Send it whenever you see a name you have not sent before, a small in-memory
 set of JIDs you have already posted is enough. Batch them, it takes a list.
 The API matches `2239…@s.whatsapp.net` to `+223 9…` in the history by itself.
 
 ## The two things the bot says unprompted
 
 Both are generated on request and posted by you. The API never sends
-anything by itself — the rule about when the bot may speak lives in the
+anything by itself, the rule about when the bot may speak lives in the
 worker, in one place.
 
 **The daily digest.** Once a day, at a fixed hour:
@@ -238,7 +236,7 @@ GET /digest/<group_id>?lang=en     // or ?day=2026-09-21 for a specific day
 ```
 
 Five lines, each under 25 words, each cited. `quiet: true` means nothing
-happened worth posting — post nothing, do not announce the silence. `lang`
+happened worth posting, post nothing, do not announce the silence. `lang`
 pins the language; without it the model picks, which makes the bot look
 erratic across days in a bilingual group.
 
@@ -275,8 +273,7 @@ wording is not free. Drop anything where `msg.key.fromMe` is true, and ignore
 any sender you have identified as a bot.
 
 **Wait two or three seconds before sending.** A number that replies in 200
-milliseconds, every time, at four in the morning, is a number Meta blocks —
-and a blocked number ends the project in one move. The delay costs nothing
+milliseconds, every time, at four in the morning, is a number Meta blocks, and a blocked number ends the project in one move. The delay costs nothing
 and makes the bot look like a participant rather than a scraper.
 
 **Never send a message nobody asked for.** No welcome messages, no direct
@@ -290,11 +287,11 @@ route to a ban, and the fastest route to the group resenting it.
 | `duplicate` | already answered; `answered_at` and `original_question` say when and what | in the group, post once per topic and then stay quiet |
 | `repeat` | the same person asked the same words seconds ago | say nothing, it was a double tap or a retry |
 | `rate_limited` | this person has hit the hourly limit | send `answer` as-is, it is already a polite message in their language |
-| `degraded` | the daily spend cap was reached; the answer came from search alone | send it normally — it is still sourced, just blunter |
+| `degraded` | the daily spend cap was reached; the answer came from search alone | send it normally, it is still sourced, just blunter |
 
 ## Failures
 
-`/ask` can be slow — it calls a model. Allow **30 seconds** before giving up,
+`/ask` can be slow, it calls a model. Allow **30 seconds** before giving up,
 and send something human on timeout rather than nothing:
 
 > Je mets plus de temps que prévu, réessaie dans un instant.
@@ -303,7 +300,7 @@ On a 5xx, do not retry in a loop: one retry, then give up. The worker going
 quiet is recoverable; the worker spamming the group is not.
 
 `GET /health` returns `{status, utterances, generation, embeddings}`. If
-`generation` is `false` the API is answering without Claude — still correct,
+`generation` is `false` the API is answering without Claude, still correct,
 just blunter. Worth logging at startup so a degraded night is obvious.
 
 ## Things the API deliberately does not do
