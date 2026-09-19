@@ -158,7 +158,28 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
 
     personal = req.private and trusted
 
-    if trusted and intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
+    # The schedule, for anybody on any client. It is built from dates the
+    # group itself wrote and it names nobody privately, so it is exactly as
+    # public as an ordinary answer, which this endpoint already serves to
+    # strangers. It used to be reachable only from a private WhatsApp chat,
+    # which meant the group and the web page could not use a feature the
+    # usage guide lists without qualification.
+    if intent.wants_the_timeline(question) and not limits.over_spend_cap(pool):
+        try:
+            drawn = timeline_engine.build(pool, req.group_id)
+            if drawn.get("timeline"):
+                return AskResponse(
+                    answer=drawn["timeline"],
+                    sources=[],
+                    meta={"duplicate": False, "timeline": True,
+                          "preformatted": True, "events": drawn.get("events")},
+                )
+        except Exception as exc:  # noqa: BLE001
+            # Same reasoning as the summary below: on the public page an
+            # ordinary answer beats a well-worded error.
+            print(f"timeline failed, answering as a question: {exc}", flush=True)
+
+    if intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
         try:
             if personal:
                 # In a direct message, "summarise" means "what did I miss",
@@ -173,6 +194,17 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                     brief.get("summary"), brief.get("since"), brief.get("message_count")
                 )
             else:
+                # Everybody else, the web page included, gets the group
+                # digest. It is the same five lines the bot posts in the
+                # group every morning, so there is nothing in it that its
+                # members have not already been shown, and it needs no
+                # identity to be correct.
+                #
+                # Only the personal briefing above stays behind the token.
+                # That one is one member's unread history and it moves their
+                # bookmark, so serving it to an unauthenticated caller
+                # naming somebody else would hand over their briefing and
+                # silently lose them everything they had not read.
                 digest = recap.daily_digest(pool, req.group_id, lang=None)
                 text, covering, count = (
                     digest.get("digest"), digest.get("since"), digest.get("message_count")
@@ -430,6 +462,50 @@ def feedback(req: FeedbackRequest) -> dict:
 
     if row is None:
         raise HTTPException(status_code=404, detail="no answer to rate yet")
+    return {"rated": str(row[0])}
+
+
+class RatingRequest(BaseModel):
+    helpful: bool
+
+
+@app.post("/feedback/{answer_id}")
+def rate_answer(answer_id: str, req: RatingRequest) -> dict:
+    """Rate one specific answer, by its id.
+
+    This is how the web page rates, and it is deliberately not behind the
+    worker token: the page is public and has to be usable, and the id is the
+    proof. Every answer carries its own in `meta.answer_id`, so the only
+    answers a visitor can rate are the ones they were actually given. A
+    random uuid is not guessable, and nothing here reveals one.
+
+    The name-keyed endpoint above cannot be used from the page. It rates the
+    last answer a given person got, and on a public page the name is whatever
+    the visitor typed, so anybody could mark anybody else's answers.
+
+    As there, the rating also lands on the original when the answer was a
+    reused one, because that is the row duplicate detection will serve again.
+    """
+    try:
+        with pool.connection() as conn:
+            row = conn.execute(
+                """with target as (
+                     select id, reused_from from answers where id = %s
+                   )
+                   update answers set rating = %s
+                   where id in (select id from target)
+                      or id in (select reused_from from target
+                                where reused_from is not null)
+                   returning id""",
+                (answer_id, 1 if req.helpful else -1),
+            ).fetchone()
+    except Exception:  # noqa: BLE001
+        # A malformed id is a 404, not a 500. The page sends whatever it was
+        # given and an invalid uuid must not read as a server fault.
+        raise HTTPException(status_code=404, detail="no such answer") from None
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="no such answer")
     return {"rated": str(row[0])}
 
 

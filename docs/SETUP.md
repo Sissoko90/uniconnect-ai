@@ -248,13 +248,22 @@ loopback without going through nginx at all:
 server {
     server_name uniconnect.example.com;
 
-    # The web fallback page, the question endpoint behind it, the usage page
-    # for the judges, and liveness. Nothing else.
+    # The web fallback page, the question endpoint behind it, the rating
+    # buttons under each answer, the usage page for the judges, and
+    # liveness. Nothing else.
     location = /            { include proxy_params; proxy_pass http://127.0.0.1:8000; }
     location = /ask         { include proxy_params; proxy_pass http://127.0.0.1:8000; }
     location = /logo.png     { include proxy_params; proxy_pass http://127.0.0.1:8000; }
     location = /metrics/page { include proxy_params; proxy_pass http://127.0.0.1:8000; }
     location = /health      { include proxy_params; proxy_pass http://127.0.0.1:8000; }
+
+    # Rating one answer by its id. Public on purpose: the page is open to
+    # anybody and the uuid is the proof, so a visitor can only rate an
+    # answer they were actually given. The bare /feedback below it, which
+    # rates by member name, stays private.
+    location ~ ^/feedback/[0-9a-fA-F-]{36}$ {
+        include proxy_params; proxy_pass http://127.0.0.1:8000;
+    }
 
     # Everything else - /messages, /voice, /alerts, /catchup, /digest,
     # /recap, /timeline, /people, /feedback - stays on loopback.

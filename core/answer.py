@@ -351,22 +351,28 @@ def record(
     usage: dict | None = None,
     degraded: bool = False,
     reused_from=None,
-) -> None:
+):
     """Best effort: a failure here must never cost the user their answer.
 
     This row is three things at once: the duplicate-detection index, the
     usage metrics shown to the judges, and the ledger the daily spend cap is
     measured against. Which is why the token counts are the ones the API
     reported, not an estimate.
+
+    Returns the row's id, or None if the write failed. The id is what lets a
+    reader rate this exact answer: on a public page the name of the asker is
+    whatever the visitor typed, so rating "the last answer this person got"
+    would let anybody mark anybody else's.
     """
     try:
         with pool.connection() as conn:
-            conn.execute(
+            row = conn.execute(
                 """insert into answers
                      (question, answer, cited_ids, asked_by, group_id,
                       question_embedding, asked_privately, input_tokens,
                       output_tokens, degraded, reused_from)
-                   values (%s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)""",
+                   values (%s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)
+                   returning id""",
                 (
                     question,
                     answer,
@@ -380,9 +386,10 @@ def record(
                     degraded,
                     reused_from,
                 ),
-            )
+            ).fetchone()
+            return str(row[0]) if row else None
     except Exception:  # noqa: BLE001 - metrics are not worth an outage
-        pass
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -642,7 +649,7 @@ def answer_question(
         #
         # No usage is attached because no model was called, which is exactly
         # what makes the spend figures still true.
-        record(
+        answer_id = record(
             pool, question, dup["answer"], user, group_id,
             dup["cited_ids"], qvec, private,
             reused_from=dup["id"],
@@ -651,6 +658,7 @@ def answer_question(
             "answer": dup["answer"],
             "sources": _as_sources(sources_of(pool, dup["cited_ids"])),
             "meta": {
+                "answer_id": answer_id,
                 "duplicate": True,
                 "answered_at": dup["asked_at"].isoformat().replace("+00:00", "Z"),
                 # Safe to echo: the match is scoped to questions of the same
@@ -668,11 +676,12 @@ def answer_question(
         # source is the interesting one - and it is what stops the hourly
         # limit being walked straight past by asking things that match
         # nothing, which would still cost an embedding every time.
-        record(pool, question, NO_SOURCE[lang], user, group_id, [], qvec, private)
+        answer_id = record(pool, question, NO_SOURCE[lang], user, group_id, [], qvec, private)
         return {
             "answer": NO_SOURCE[lang],
             "sources": [],
-            "meta": {"duplicate": False, "first_answer": first_answer},
+            "meta": {"answer_id": answer_id, "duplicate": False,
+                     "first_answer": first_answer},
         }
 
     usage = None
@@ -707,16 +716,17 @@ def answer_question(
             # verbatim. Without a model to sort the relevant from the merely
             # nearby, saying so is the honest answer and the one that keeps
             # the promise never to invent.
-            record(pool, question, NO_SOURCE[lang], user, group_id, [], qvec, private,
-                   degraded=True)
+            answer_id = record(pool, question, NO_SOURCE[lang], user, group_id, [],
+                               qvec, private, degraded=True)
             return {
                 "answer": NO_SOURCE[lang],
                 "sources": [],
-                "meta": {"duplicate": False, "degraded": True, "first_answer": first_answer},
+                "meta": {"answer_id": answer_id, "duplicate": False,
+                         "degraded": True, "first_answer": first_answer},
             }
         text, used = quoted
 
-    record(
+    answer_id = record(
         pool,
         question,
         text,
@@ -735,5 +745,6 @@ def answer_question(
         # degraded says the answer came from search alone. The worker can show
         # it or not; what matters is that it is never silently implied to be a
         # written answer.
-        "meta": {"duplicate": False, "degraded": degraded, "first_answer": first_answer},
+        "meta": {"answer_id": answer_id, "duplicate": False,
+                 "degraded": degraded, "first_answer": first_answer},
     }

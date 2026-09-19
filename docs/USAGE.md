@@ -6,6 +6,33 @@ Two rules explain the rest. **In the group it stays quiet**: it reads every
 message but only writes when you call it. **In a private chat it always
 answers**, and nobody else sees any of it.
 
+## Where each thing works
+
+| | Group | Private chat | Browser |
+|---|---|---|---|
+| Ask a question, with citations | `@ask …` | just type it | yes |
+| The group's schedule | `@ask timeline` | `timeline` | yes |
+| A summary of the group | `@ask résumé` | see below | yes |
+| Your own catch-up | not applicable | `what did I miss` | no, see below |
+| Say an answer was wrong | react 👍 👎 | react 👍 👎 | the buttons under the answer |
+| Voice notes, transcribed and searchable | yes | yes | no |
+| Told when the group is waiting on you | arrives privately | arrives privately | no |
+| The morning digest | posted at 07:00 UTC | no | ask for a summary |
+
+Two of those say no, and both for a reason rather than an oversight.
+
+**Your own catch-up is not on the page.** It is one member's unread history,
+and asking for it moves their bookmark forward. The page is open to the
+internet and the name in it is whatever the visitor typed, so serving a
+catch-up there would let a stranger read somebody's briefing and silently
+lose them everything they had not read yet. WhatsApp knows who you are; a
+public page does not. Ask for a summary on the page and you get the group
+digest, which is the same five lines the bot posts in the group each morning.
+
+**Voice notes and being told the group is waiting on you** are things WhatsApp
+does and a web page cannot: one is a recording you already send there, the
+other is the bot writing to you first.
+
 ---
 
 ## In the group
@@ -118,7 +145,10 @@ timeline
 planning
 agenda
 calendrier
+quelles dates sont fixées
 ```
+
+The same words work in the group behind `@ask`, and on the web page.
 
 Every date the group has actually fixed, in order, with the message each one
 came from:
@@ -163,7 +193,8 @@ If you reply in the group before it gets to you, it drops the reminder.
 
 ## Telling it when it is wrong
 
-React to any of its answers:
+React to any of its answers in WhatsApp, or use the two buttons under an
+answer on the web page:
 
 | | |
 |---|---|
@@ -182,6 +213,13 @@ fixes it for everybody.
 
 The same bot, same answers, same citations, for anyone not on WhatsApp or
 anyone who prefers a keyboard.
+
+Type `timeline` for the schedule and `summary` for the group digest, exactly
+as in WhatsApp. Under every answer there are two buttons, 👍 and 👎, and they
+do the same thing as reacting in WhatsApp: a thumb down retires that answer
+so it stops being reused. They work without signing in, because each answer
+carries its own identifier and the buttons rate that one answer. Nobody can
+rate an answer they were not given.
 
 **https://uniconnectai.abdatytch.com/metrics/page**
 

@@ -72,6 +72,24 @@
   .who { font-size: .85rem; color: var(--muted); margin-bottom: 3px; }
   .who b { color: var(--fg); font-weight: 600; }
   .quote { font-size: .92rem; white-space: pre-wrap; }
+  /* The timeline is drawn in code with aligned columns, so it needs a
+     monospaced font and a scrollbar of its own rather than wrapping. */
+  .drawn {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .85rem; overflow-x: auto; white-space: pre;
+  }
+  .rate {
+    display: flex; align-items: center; gap: 8px;
+    margin: -8px 0 20px; color: var(--muted); font-size: .85rem;
+  }
+  .rate button {
+    background: none; border: 1px solid var(--line); color: var(--fg);
+    border-radius: 999px; padding: 3px 12px; font-size: .9rem; font-weight: 400;
+  }
+  .rate button:hover:not(:disabled) { border-color: var(--accent); }
+  .rate button[aria-pressed="true"] {
+    background: var(--accent); color: #fff; border-color: transparent;
+  }
   footer {
     margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
     color: var(--muted); font-size: .85rem;
@@ -98,7 +116,8 @@
     Try
     <button type="button" data-q="What are the hackathon deliverables?">the deliverables</button>·
     <button type="button" data-q="Quand a lieu l'Open Hour ?">l'Open Hour (en français)</button>·
-    <button type="button" data-q="Who do I contact about my Wadhwani account?">who to contact</button>
+    <button type="button" data-q="timeline">the schedule</button>·
+    <button type="button" data-q="summary of the group">a summary</button>
   </p>
 
   <div id="out" hidden></div>
@@ -133,6 +152,25 @@
       { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
+  async function rate(answerId, helpful, pressed, other) {
+    // Both buttons go dead on the first click. A rating is a single act, and
+    // a row that can be flipped back and forth is a row nobody can trust.
+    pressed.disabled = other.disabled = true;
+    pressed.setAttribute("aria-pressed", "true");
+    try {
+      await fetch(`/feedback/${answerId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ helpful }),
+      });
+      pressed.closest(".rate").lastElementChild.textContent =
+        helpful ? "Thank you." : "Noted. This answer will not be reused.";
+    } catch {
+      pressed.closest(".rate").lastElementChild.textContent =
+        "Could not send that, but the answer is still above.";
+    }
+  }
+
   function render(data) {
     // A "degraded" answer came from search alone, with no model behind it.
     // Saying so is the point: the page never implies more than it did.
@@ -147,9 +185,35 @@
         <div class="quote">${escape(s.excerpt)}</div>
       </div>`).join("");
 
+    // The timeline arrives as a drawing with aligned columns. Wrapping it
+    // like prose turns it into nonsense.
+    const body = data.meta?.preformatted
+      ? `<div class="drawn">${escape(data.answer)}</div>`
+      : escape(data.answer);
+
     out.innerHTML = `
-      <div class="answer">${flag}${escape(data.answer)}</div>
+      <div class="answer">${flag}${body}</div>
       ${sources ? `<h2>Sources</h2>${sources}` : ""}`;
+
+    // Rating needs the answer's own id. Without one there is nothing to
+    // rate, which is the case for a greeting or a timeline: neither is an
+    // answer drawn from the history and neither is ever reused.
+    const answerId = data.meta?.answer_id;
+    if (answerId) {
+      const bar = document.createElement("div");
+      bar.className = "rate";
+      bar.innerHTML =
+        '<button type="button" title="Useful">👍</button>' +
+        '<button type="button" title="Wrong or useless">👎</button>' +
+        "<span>Was this useful?</span>";
+      const [up, down] = bar.querySelectorAll("button");
+      up.addEventListener("click", () => rate(answerId, true, up, down));
+      down.addEventListener("click", () => rate(answerId, false, down, up));
+      // After the answer, before the sources, which is where the eye lands
+      // once it has finished reading.
+      out.insertBefore(bar, out.children[1] || null);
+    }
+
     out.hidden = false;
   }
 

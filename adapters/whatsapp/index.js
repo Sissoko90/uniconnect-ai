@@ -143,6 +143,14 @@ const FIRST_TIME_HINT =
  */
 function withSources(result) {
   const source = result.sources?.[0];
+
+  // The timeline is drawn in code with aligned columns. WhatsApp only keeps
+  // that alignment inside a fenced block, and the citation markers are not
+  // stripped from it because there are none to strip.
+  if (result.meta?.preformatted) {
+    return '```\n' + (result.answer || '') + '\n```';
+  }
+
   let text = (result.answer || '').replace(/\s*\[\d+\]/g, '');
 
   if (source) {

@@ -114,3 +114,38 @@ def test_a_summary_about_a_topic_is_still_an_ordinary_question():
 def test_surtout_is_not_the_word_tout():
     """Substring matching would have made this a whole-group summary."""
     assert not intent.wants_a_summary("résumé sur le projet, surtout la partie technique")
+
+
+# --------------------------------------------------------------------------
+# The schedule
+# --------------------------------------------------------------------------
+
+
+def test_the_documented_catchup_words_are_matched():
+    """USAGE.md lists these as the way to ask for a catch-up. The worker had
+    its own list and the API did not share it, so every one of them reached
+    retrieval as an ordinary question and found nothing."""
+    for question in ["what did I miss", "qu'est-ce que j'ai raté", "rattrapage",
+                     "update me", "what have I missed?"]:
+        assert intent.wants_a_summary(question), question
+
+
+def test_the_schedule_is_asked_for_in_either_language():
+    for question in ["timeline", "planning", "agenda", "calendrier",
+                     "quelles dates sont fixées", "show me the schedule"]:
+        assert intent.wants_the_timeline(question), question
+
+
+def test_a_question_about_an_agenda_is_not_the_schedule():
+    """"What is on the agenda for the call about visas" is a question about
+    that call, and retrieval answers it with the message it came from."""
+    assert not intent.wants_the_timeline("what is on the agenda about visas")
+    assert not intent.wants_the_timeline("un planning sur la formation")
+
+
+def test_the_schedule_wins_over_the_summary():
+    """"planning" and "agenda" are the words people reach for when they want
+    the list of dates. A digest of the last day is not that, and /ask checks
+    the timeline first for exactly this reason."""
+    assert intent.wants_the_timeline("planning")
+    assert not intent.wants_a_summary("planning")

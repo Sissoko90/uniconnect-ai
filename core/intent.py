@@ -24,6 +24,21 @@ SUMMARY_PHRASES = (
     "what's happening", "whats happening", "what is happening", "catch me up",
     "résumé", "resume", "resume-moi", "recapitulatif", "récapitulatif",
     "quoi de neuf", "que se passe", "ce qui se passe",
+    # Promised in USAGE.md and matched by nothing, so the documented way to
+    # ask for a catch-up was answered as an ordinary question and found
+    # nothing. The worker had its own list and the API did not share it.
+    "what did i miss", "what have i missed", "update me", "bring me up",
+    "j'ai raté", "j'ai rate", "ai-je raté", "rattrapage", "rattraper",
+)
+
+# The group's schedule, drawn from the dates in its own messages. Same words
+# the worker matches on, kept here so that every client gets it: it was in a
+# private WhatsApp chat only, and neither the group nor the web page could
+# reach a feature the usage guide lists without qualification.
+TIMELINE_PHRASES = (
+    "timeline", "schedule", "roadmap", "planning", "calendrier", "agenda",
+    "les dates", "quelles dates", "prochaines dates", "echeancier",
+    "échéancier",
 )
 
 # A summary *of something* is an ordinary question about that thing, and
@@ -62,6 +77,21 @@ def wants_a_summary(question: str) -> bool:
     # whole picture, however the sentence is built around it.
     if set(re.findall(r"[\w']+", lowered)) & WHOLE_GROUP:
         return True
+    return not any(marker in lowered for marker in ABOUT_SOMETHING)
+
+
+def wants_the_timeline(question: str) -> bool:
+    """A request for the group's dates rather than a question about one.
+
+    Checked before the summary, because "planning" and "agenda" are the words
+    people reach for when they want the list of dates, and a digest of the
+    last day is not that.
+    """
+    lowered = question.lower()
+    if not any(phrase in lowered for phrase in TIMELINE_PHRASES):
+        return False
+    # "what is on the agenda for the call about visas" is a question about the
+    # call, and retrieval answers it with the message it came from.
     return not any(marker in lowered for marker in ABOUT_SOMETHING)
 
 
