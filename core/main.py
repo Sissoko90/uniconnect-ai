@@ -797,6 +797,10 @@ def health():
         # normal state, so the count belongs where somebody will see it.
         "embedding_refusals": answer_engine.embeddings.refusals,
         "last_embedding_refusal": answer_engine.embeddings.last_refusal,
+        # Questions answered without asking the provider at all, because
+        # somebody had already asked the same thing. On a rate-limited
+        # account this is the difference between working and not.
+        "embedding_cache_hits": answer_engine.embeddings.cache_hits,
         # And what it has cost today, so nobody has to open a billing console
         # to find out why answers suddenly got blunter.
         "spend_today_usd": round(limits.spend_today_usd(pool), 4),
