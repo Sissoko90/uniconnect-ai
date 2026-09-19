@@ -91,3 +91,16 @@ export const timeline = (groupId) =>
 /** Rate the last answer a person received. */
 export const feedback = (user, groupId, helpful) =>
   call('POST', '/feedback', { body: { user, group_id: groupId, helpful } });
+
+export const surveyDue = (groupId) =>
+  call('GET', `/survey/${encodeURIComponent(groupId)}`);
+
+export const surveySent = (groupId, user, messageId) =>
+  call('POST', '/survey/sent', {
+    body: { group_id: groupId, user, message_id: messageId },
+  });
+
+// Returns {survey: true} when the reacted message was a survey, so the
+// caller knows not to rate it as an ordinary answer as well.
+export const surveyRating = (messageId, helpful) =>
+  call('POST', '/survey/rating', { body: { message_id: messageId, helpful } });

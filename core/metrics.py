@@ -90,7 +90,16 @@ def summary(pool) -> dict:
     sourced = totals["answers_with_sources"] or 0
     totals["source_coverage_pct"] = round(100 * sourced / answered, 1) if answered else None
 
-    return {"totals": totals, "by_day": by_day, "top_askers": askers}
+    # What members think of the bot, not of one answer. The figure the group
+    # is actually voting on, so it belongs on the page they are shown.
+    import satisfaction
+
+    return {
+        "totals": totals,
+        "by_day": by_day,
+        "top_askers": askers,
+        "satisfaction": satisfaction.summary(pool),
+    }
 
 
 
@@ -249,10 +258,18 @@ def page(pool) -> str:
     ])
 
     coverage = t["source_coverage_pct"]
+    # What members think of the bot itself, which is the question the group
+    # is voting on. Shown as a share of the people who answered the survey,
+    # not of everybody asked: most never react, and dividing by everybody
+    # would read as though half the group disliked it.
+    sat = data.get("satisfaction") or {}
+    share = sat.get("positive_share")
+    verdict = f"{round(100 * share)}%" if share is not None else "no answers yet"
+
     quality = _tiles([
         ("Answers carrying a source", f"{coverage or 0}%", True),
         ("Sources per answer", t["sources_per_answer"] or 0, False),
-        ("Rated helpful", t["rated_helpful"], False),
+        ("Members who would keep it", verdict, share is not None and share >= 0.5),
         ("Days in use", t["days_used"], False),
     ])
 
@@ -262,6 +279,11 @@ def page(pool) -> str:
         "The percentage above is how often it found a source, not how often "
         "it replied."
     )
+    if sat.get("answered"):
+        footer += (
+            f' {sat["answered"]} members have been asked what they think of it '
+            f'after using it, and {sat["positive"]} would keep it.'
+        )
 
     return PAGE.format(
         people=people,

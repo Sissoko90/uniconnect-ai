@@ -35,6 +35,7 @@ import intent
 import limits
 import metrics as metrics_engine
 import recap
+import satisfaction
 import timeline as timeline_engine
 import voice
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
@@ -425,6 +426,58 @@ def ingest_voice(note: VoiceNote, background: BackgroundTasks) -> dict:
     if result.get("stored"):
         background.add_task(ingest.embed_pending, pool)
     return result
+
+
+# --------------------------------------------------------------------------
+# What members think of the bot
+# --------------------------------------------------------------------------
+
+
+@app.get("/survey/{group_id}", dependencies=[Depends(auth.require_worker)])
+def survey_due(group_id: str, limit: int = 5) -> dict:
+    """Who has asked enough questions to have an opinion, and never been asked.
+
+    Same shape as /alerts, and for the same reason: the API says who
+    qualifies and the worker decides whether to write to them. Nothing is
+    ever posted in the group, and the cap per call keeps a first run on an
+    established group from sending fifty private messages in one minute.
+    """
+    return {"due": satisfaction.due(pool, group_id, limit=min(limit, 20))}
+
+
+class SurveySent(BaseModel):
+    group_id: str
+    user: str
+    # The WhatsApp id of the message that went out. It is what tells a thumb
+    # on the survey apart from a thumb on an answer later on.
+    message_id: str | None = None
+
+
+@app.post("/survey/sent", dependencies=[Depends(auth.require_worker)])
+def survey_sent(req: SurveySent) -> dict:
+    """Recorded once it has gone out, never before.
+
+    Marking first and sending after loses the survey for good on any
+    failure, which is the bug the daily digest had.
+    """
+    satisfaction.mark_asked(pool, req.group_id, req.user, req.message_id)
+    return {"recorded": True}
+
+
+class SurveyRating(BaseModel):
+    message_id: str
+    helpful: bool
+
+
+@app.post("/survey/rating", dependencies=[Depends(auth.require_worker)])
+def survey_rating(req: SurveyRating) -> dict:
+    """A thumb on a survey message.
+
+    Answers {"survey": false} rather than 404 when the id is not a survey.
+    The worker asks this about every reaction it sees, and "that was an
+    ordinary answer, go and rate it" is a normal outcome, not an error.
+    """
+    return {"survey": satisfaction.record(pool, req.message_id, req.helpful)}
 
 
 # --------------------------------------------------------------------------

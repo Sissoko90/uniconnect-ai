@@ -20,6 +20,7 @@ answers**, and nobody else sees any of it.
 | Voice notes, transcribed and searchable | yes | yes | no |
 | Told when the group is waiting on you | arrives privately | arrives privately | no |
 | The morning digest | posted at 07:00 UTC | no | ask for a summary |
+| Asked what you think of the bot | no | once, after 5 questions | no |
 
 Two of those say no, and both for a reason rather than an oversight.
 
@@ -244,6 +245,17 @@ answer on the web page:
 This is not decoration. A thumb down **retires that answer**: it stops being
 reused when somebody asks the same thing later. One person correcting it
 fixes it for everybody.
+
+### And once, it asks you about itself
+
+After you have asked it five questions, the bot writes to you privately,
+once, to ask whether it is worth keeping. Two options, 👍 or 👎, and nothing
+else: no form, no follow-up, and it never asks you again whatever you answer.
+
+It waits for five questions because before that you have no opinion worth
+giving, and it writes in private because a survey in the group would be the
+noise this whole bot exists to remove. The result is on the metrics page as
+a share of the people who answered.
 
 ---
 

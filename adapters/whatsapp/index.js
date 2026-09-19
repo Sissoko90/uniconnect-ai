@@ -302,6 +302,19 @@ async function handleReaction(event) {
   const user = event.reaction?.key?.participant || event.reaction?.key?.remoteJid;
   if (!user) return;
 
+  // A reaction carries the id of the message it sits on and nothing else,
+  // so ask first whether that message was the satisfaction survey. Getting
+  // this wrong would retire whatever answer the person last received, on
+  // the strength of a thumb they meant for the bot as a whole.
+  const reacted = event.key?.id;
+  if (reacted) {
+    const { survey } = await api.surveyRating(reacted, helpful);
+    if (survey) {
+      console.log(`${emoji} from ${user}: rated the bot ${helpful ? 'up' : 'down'}`);
+      return;
+    }
+  }
+
   await api.feedback(user, GROUP_ID, helpful);
   console.log(`${emoji} from ${user}: rated ${helpful ? 'helpful' : 'unhelpful'}`);
 }
@@ -552,7 +565,56 @@ function startBackgroundJobs(sock) {
   startBackgroundJobs.started = true;
 
   setInterval(() => deliverAlerts(sock).catch((e) => console.error(e.message)), ALERT_INTERVAL_MS);
+  // Same timer, and the same rule: private, rare, and never twice to
+  // the same person.
+  setInterval(
+    () => askHowItIsGoing(sock).catch((e) => console.error(e.message)),
+    ALERT_INTERVAL_MS
+  );
   setInterval(() => maybePostDigest(sock).catch((e) => console.error(e.message)), 10 * 60_000);
+}
+
+const SURVEY = {
+  en:
+    'You have asked me a few things now, so I would like to know what you ' +
+    'think.\n\nReact to this message:\n\n👍  useful, keep it\n👎  not useful\n\n' +
+    'That is the whole survey. Nothing else, and I will not ask again.',
+  fr:
+    "Tu m'as posé quelques questions, alors j'aimerais savoir ce que tu en " +
+    'penses.\n\nRéagis à ce message :\n\n👍  utile, on garde\n👎  pas utile\n\n' +
+    "C'est tout. Rien d'autre, et je ne te le redemanderai pas.",
+};
+
+/**
+ * Ask a few members what they think of the bot, once each.
+ *
+ * The API decides who qualifies: five questions asked and never surveyed.
+ * Sent privately, never in the group, for the same reason as everything
+ * else the bot does uninvited.
+ *
+ * Marked as asked only once the message has gone out. Marking first would
+ * lose the survey for good on any failure, which is the bug the daily digest
+ * had and which suppressed a whole morning's digest.
+ */
+async function askHowItIsGoing(sock) {
+  const { due } = await api.surveyDue(GROUP_ID);
+  if (!due.length) return;
+
+  for (const person of due) {
+    const jid = person.asked_by.includes('@')
+      ? person.asked_by
+      : `${person.asked_by}@s.whatsapp.net`;
+    try {
+      await humanPause();
+      const sent = await sock.sendMessage(jid, {
+        text: SURVEY[process.env.SURVEY_LANG === 'fr' ? 'fr' : 'en'],
+      });
+      await api.surveySent(GROUP_ID, person.asked_by, sent?.key?.id || null);
+      console.log(`asked ${jid} what they think (${person.questions} questions)`);
+    } catch (error) {
+      console.error(`survey to ${jid} failed:`, error.message);
+    }
+  }
 }
 
 /**
