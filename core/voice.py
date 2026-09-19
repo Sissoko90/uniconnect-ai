@@ -55,6 +55,11 @@ def transcribe(audio: bytes, mime_type: str) -> str:
     """The spoken words, or an empty string when there are none."""
     import requests
 
+    # WhatsApp reports "audio/ogg; codecs=opus", not "audio/ogg". The
+    # parameter has to go before the type is looked up or sent on: the lookup
+    # would miss and the API would reject the content type outright, which
+    # would have made every single voice note fail.
+    mime_type = mime_type.split(";")[0].strip().lower()
     extension = EXTENSIONS.get(mime_type, ".ogg")
     with tempfile.NamedTemporaryFile(suffix=extension) as fh:
         fh.write(audio)

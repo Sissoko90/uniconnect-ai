@@ -99,9 +99,15 @@ const senderOf = (msg) => msg.key.participant || msg.key.remoteJid || '';
 
 const isGroup = (jid) => (jid || '').endsWith('@g.us');
 
+// Phone keyboards produce a curly apostrophe (U+2019), the phrases below are
+// written with a straight one, and the two do not match. Without this, every
+// French speaker typing "qu'est-ce que j'ai raté" on an iPhone would get an
+// ordinary answer instead of their catch-up, and nothing would look broken.
+const normalise = (text) => text.toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'");
+
 const matches = (text, phrases) => {
-  const lower = text.toLowerCase();
-  return phrases.some((p) => lower.includes(p));
+  const lower = normalise(text);
+  return phrases.some((p) => lower.includes(normalise(p)));
 };
 
 // Said once to each person, on their first answer ever. Everybody learns that
@@ -223,7 +229,7 @@ async function handle(sock, msg) {
   // A voice note: the most invisible thing in the group. Store it and say
   // nothing - reading everything, writing almost nothing.
   if (msg.message?.audioMessage && inGroup) {
-    await ingestVoice(msg, sender, when);
+    await ingestVoice(sock, msg, sender, when);
     return;
   }
 
@@ -257,9 +263,14 @@ async function ingestText(msg, text, sender, when) {
   }
 }
 
-async function ingestVoice(msg, sender, when) {
+async function ingestVoice(sock, msg, sender, when) {
   try {
-    const buffer = await downloadMediaMessage(msg, 'buffer', {});
+    // reuploadRequest matters: WhatsApp drops media from its CDN after a
+    // while, and without this the download fails for anything not brand new.
+    // A voice note the bot sees a minute late is exactly the normal case.
+    const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
+      reuploadRequest: sock.updateMediaMessage,
+    });
     const result = await api.sendVoice({
       group_id: GROUP_JID,
       author: sender,

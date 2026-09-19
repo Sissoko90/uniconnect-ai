@@ -103,10 +103,12 @@ def pending(pool, group_id: str, limit: int = 50) -> list[dict]:
     return [
         {
             "id": str(r["id"]),
-            # The worker needs a JID to write to. handle is the spelling we
-            # were given; user_norm is the digits, which is enough to build
-            # one when nobody has told us the handle.
-            "to": r["to_handle"] or r["user_norm"],
+            # Digits only, always. The worker turns this into a JID, and
+            # people.handle is whatever spelling we were first given: a vCard
+            # writes "+256 787 004799", which would have produced
+            # "+256 787 004799@s.whatsapp.net" and failed on every alert to
+            # anybody whose name came from an export.
+            "to": r["user_norm"],
             "to_name": r["to_name"],
             "from_author": r["from_author"],
             "said_at": r["said_at"].isoformat().replace("+00:00", "Z"),
