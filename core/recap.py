@@ -170,6 +170,17 @@ limit %(limit)s
 """
 
 
+# max_tokens is a ceiling shared with the thinking, not a target.
+#
+# Every call here uses adaptive thinking, and the tokens the model spends
+# thinking come out of this same budget. Set it to what the answer should be
+# and the thinking eats most of it, leaving the text to stop in the middle of
+# a sentence: the whole-group overview was cut off mid-bullet at 2000.
+#
+# Raising it costs nothing. Only the tokens actually produced are billed, and
+# every one of these prompts is told how long its answer should be.
+
+
 def _write(system: str, body: str, instruction: str, max_tokens: int, effort: str) -> str:
     prompt = (
         f"{body}\n\n"
@@ -216,7 +227,7 @@ def call_recap(pool, source_id: str) -> dict:
         RECAP_SYSTEM,
         answer_engine.format_messages(blocks),
         f"Write the recap of: {call['title']}",
-        max_tokens=1500,
+        max_tokens=8000,
         # Higher than /ask: pulling decisions and owners out of an hour of
         # talk is the hardest reading this system does, and a recap is
         # written once and read by everybody.
@@ -285,7 +296,7 @@ def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None =
         f"{DIGEST_SYSTEM}\n\n{rule}",
         answer_engine.format_messages(rows),
         f"Write the digest for the {len(rows)} messages above.",
-        max_tokens=800,
+        max_tokens=4000,
         effort="medium",
     )
     result["lang"] = chosen or "auto"
@@ -395,10 +406,14 @@ def overview(pool, group_id: str, lang: str | None = None, question: str | None 
         f"{OVERVIEW_SYSTEM}\n\n{rule}",
         answer_engine.format_messages(rows),
         asked,
-        # Longer than a digest on purpose. This one is read once, by somebody
-        # who has decided to sit down and understand the group, and cutting
-        # it to five lines would defeat the whole point of asking.
-        max_tokens=2000,
+        # Longer than a digest on purpose. This one is read once, by
+        # somebody who has decided to sit down and understand the group, and
+        # cutting it to five lines would defeat the whole point of asking.
+        #
+        # High because the thinking comes out of the same budget and this
+        # prompt thinks hardest of any of them. At 2000 the answer stopped
+        # mid-bullet, having spent the rest working out what to say.
+        max_tokens=16000,
         effort="high",
     )
     result["lang"] = chosen or "auto"

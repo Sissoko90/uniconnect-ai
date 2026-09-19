@@ -169,7 +169,7 @@ def _summarise(rows: list[dict], question: str | None, truncated: bool) -> str:
 
     response = answer_engine.anthropic_client().messages.create(
         model=answer_engine.MODEL,
-        max_tokens=1200,
+        max_tokens=6000,
         system=SYSTEM,
         thinking={"type": "adaptive"},
         # Slightly above /ask: reading 300 messages and deciding what matters

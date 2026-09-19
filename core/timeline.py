@@ -129,7 +129,7 @@ def build(pool, group_id: str) -> dict:
     )
     response = answer_engine.anthropic_client().messages.create(
         model=answer_engine.MODEL,
-        max_tokens=800,
+        max_tokens=8000,
         system=SYSTEM,
         thinking={"type": "adaptive"},
         output_config={"effort": "low"},

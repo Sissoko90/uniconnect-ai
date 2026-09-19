@@ -386,6 +386,30 @@ async function ingestVoice(sock, msg, sender, when) {
   }
 }
 
+/**
+ * Show "typing..." while the answer is being written.
+ *
+ * A whole-group overview takes the model the best part of a minute, and a
+ * bot that says nothing for that long has failed in the reader's mind before
+ * it answers: people ask again, or give up and decide it is broken. WhatsApp
+ * has the one signal everybody already understands, so use it.
+ *
+ * The indicator expires on its own after a few seconds, which is why it is
+ * refreshed on a timer rather than sent once. Cleared in a finally, so a
+ * failed request does not leave the bot apparently typing forever.
+ */
+async function whileThinking(sock, jid, work) {
+  const show = () => sock.sendPresenceUpdate('composing', jid).catch(() => {});
+  await show();
+  const keepAlive = setInterval(show, 8000);
+  try {
+    return await work();
+  } finally {
+    clearInterval(keepAlive);
+    await sock.sendPresenceUpdate('paused', jid).catch(() => {});
+  }
+}
+
 async function handleGroup(sock, msg, text, sender) {
   if (!text.toLowerCase().startsWith('@ask')) return; // silent, by design
 
@@ -395,7 +419,9 @@ async function handleGroup(sock, msg, text, sender) {
     return;
   }
 
-  const result = await api.ask(question, sender, GROUP_ID, false);
+  const result = await whileThinking(sock, msg.key.remoteJid, () =>
+    api.ask(question, sender, GROUP_ID, false)
+  );
 
   // Once per topic. The second person to ask gets the answer; the fifth gets
   // silence, because by then it is on the screen just above them.
@@ -416,7 +442,9 @@ async function handlePrivate(sock, msg, text, sender) {
   // In private the bot always answers. This half of the product costs the
   // group nothing, which is exactly why it is allowed to be talkative.
   if (matches(text, CATCHUP_PHRASES) && !matches(text, OVERVIEW_MARKERS)) {
-    const result = await api.catchup(sender, GROUP_ID, text);
+    const result = await whileThinking(sock, msg.key.remoteJid, () =>
+      api.catchup(sender, GROUP_ID, text)
+    );
     const lead = result.first_time
       ? 'I had no record of your last visit, so here are the last two days.\n\n'
       : '';
@@ -425,7 +453,9 @@ async function handlePrivate(sock, msg, text, sender) {
   }
 
   if (matches(text, TIMELINE_PHRASES)) {
-    const result = await api.timeline(GROUP_ID);
+    const result = await whileThinking(sock, msg.key.remoteJid, () =>
+      api.timeline(GROUP_ID)
+    );
     await reply(
       sock,
       msg,
@@ -436,7 +466,9 @@ async function handlePrivate(sock, msg, text, sender) {
     return;
   }
 
-  const result = await api.ask(text, sender, GROUP_ID, true);
+  const result = await whileThinking(sock, msg.key.remoteJid, () =>
+    api.ask(text, sender, GROUP_ID, true)
+  );
   await reply(sock, msg, withSources(result));
 }
 

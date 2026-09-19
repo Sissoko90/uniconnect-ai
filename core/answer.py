@@ -494,7 +494,7 @@ def generate(question: str, hits: list[dict]) -> tuple[str, list[int], dict]:
 
     response = anthropic_client().messages.create(
         model=MODEL,
-        max_tokens=1000,
+        max_tokens=4000,
         system=SYSTEM,
         # Adaptive thinking at low effort: the reasoning here is short, and
         # someone is waiting on WhatsApp for the reply.
