@@ -280,6 +280,19 @@ The session lives in `adapters/whatsapp/auth_info/`. **Treat that directory
 like a password**: anyone who has it can send WhatsApp messages as the bot. It
 is git-ignored; keep it that way.
 
+### Give it a face
+
+```bash
+npm run avatar
+```
+
+Sets the bot's WhatsApp profile picture to the project logo. Run it once,
+after pairing. It is what 153 people see next to every answer and at the top
+of the private chat — a default grey silhouette reads as an unfinished script.
+
+If it fails, set the picture by hand on the bot's phone using
+`assets/logo.png`. It is cosmetic; it does not block anything.
+
 ### Run it
 
 ```bash

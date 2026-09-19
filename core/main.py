@@ -37,7 +37,7 @@ import recap
 import timeline as timeline_engine
 import voice
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
 
@@ -441,6 +441,20 @@ def home() -> str:
     if we ever want it there.
     """
     return (pathlib.Path(__file__).parent / "static" / "index.html").read_text()
+
+
+@app.get("/logo.png", include_in_schema=False)
+def logo() -> FileResponse:
+    """The bot's face, on the page and as its favicon.
+
+    Served from here so the page, the README and the WhatsApp avatar are all
+    the same image. Cached hard: it changes about once a project.
+    """
+    return FileResponse(
+        pathlib.Path(__file__).parent / "static" / "logo.png",
+        media_type="image/png",
+        headers={"cache-control": "public, max-age=86400"},
+    )
 
 
 @app.get("/health")

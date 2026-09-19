@@ -4,16 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>UniConnect AI</title>
+<link rel="icon" href="/logo.png" type="image/png">
 <style>
+  /* The palette is taken from the logo: cream, ink, terracotta. Same three
+     colours on the page, in the README and on the bot's avatar, so the thing
+     looks like one product rather than three. */
   :root {
     color-scheme: light dark;
-    --bg: #fbfaf8; --fg: #1a1a1a; --muted: #6b6b6b;
-    --line: #e4e1dc; --card: #ffffff; --accent: #1f6f5c;
+    --bg: #f7f4ee; --fg: #14181d; --muted: #6b6b6b;
+    --line: #e2ddd3; --card: #fffdf9; --accent: #c0551d;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141516; --fg: #ececec; --muted: #9a9a9a;
-      --line: #2b2c2e; --card: #1c1d1f; --accent: #5fbfa4;
+      --bg: #14181d; --fg: #ece9e3; --muted: #9a9a9a;
+      --line: #2a2f36; --card: #1b2026; --accent: #e07a42;
     }
   }
   * { box-sizing: border-box; }
@@ -23,7 +27,13 @@
     font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
   }
   main { max-width: 680px; margin-inline: auto; padding-block: 48px 0; }
-  h1 { font-size: 1.5rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  header img {
+    width: 48px; height: 48px; border-radius: 12px; flex: none;
+    /* The logo carries its own cream ground, so it needs a rounded frame to
+       sit on a dark page without looking like a pasted square. */
+  }
+  h1 { font-size: 1.5rem; margin: 0; letter-spacing: -0.01em; }
   .tagline { color: var(--muted); margin: 0 0 32px; font-size: .95rem; }
   form { display: flex; gap: 8px; margin-bottom: 8px; }
   input, button {
@@ -71,7 +81,10 @@
 </head>
 <body>
 <main>
-  <h1>UniConnect AI</h1>
+  <header>
+    <img src="/logo.png" alt="" width="48" height="48">
+    <h1>UniConnect AI</h1>
+  </header>
   <p class="tagline">
     Ask the group's own history. Every answer cites who said it and when —
     and if nothing in the group answers your question, it says so.

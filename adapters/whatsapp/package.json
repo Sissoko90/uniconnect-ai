@@ -11,7 +11,8 @@
   "scripts": {
     "start": "node --env-file=.env index.js",
     "groups": "node --env-file=.env groups.js",
-    "check": "node --check index.js && node --check api.js && node --check groups.js"
+    "check": "node --check index.js && node --check api.js && node --check groups.js && node --check avatar.js",
+    "avatar": "node --env-file=.env avatar.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc14",

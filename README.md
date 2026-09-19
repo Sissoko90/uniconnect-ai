@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.png" alt="UniConnect AI" width="120">
+
 # UniConnect AI
 
 **An AI assistant for busy groups.** It reads the group's chats and call
@@ -121,6 +123,20 @@ Calling these from a bot: **[docs/INTEGRATION.md](docs/INTEGRATION.md)**.
 | [SECURITY](SECURITY.md) | threat model, automated checks, known gaps |
 | [CONTRIBUTING](CONTRIBUTING.md) | how the team works |
 | [CHANGELOG](CHANGELOG.md) | what changed |
+
+## Brand
+
+<img src="assets/logo.png" alt="" width="64" align="left" hspace="16">
+
+The mark is a speech bubble with several voices converging to a single point —
+which is the product in one image: a lot of people talking, one answer that
+cites them.
+
+The same three colours run through the web page, the bot's avatar and this
+file: cream `#f7f4ee`, ink `#14181d`, terracotta `#c0551d`. Files and palette
+are in [assets/](assets/).
+
+<br clear="left">
 
 ## Team
 
