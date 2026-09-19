@@ -128,14 +128,29 @@ class AskResponse(BaseModel):
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(req: AskRequest) -> AskResponse:
+def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse:
+    # /ask is the one endpoint open to the internet, because the web page
+    # needs it. Everything it can reach must therefore be safe for a stranger
+    # to reach, and `user` and `private` are whatever the caller typed.
+    #
+    # Routing a summary to catch-up broke that: an unauthenticated request
+    # naming somebody else returned that person's personal briefing and moved
+    # their bookmark, so they would silently lose everything they had not read
+    # yet. Both of those endpoints are behind the worker token precisely to
+    # prevent that, and this was a side door into them.
+    #
+    # Callers who prove they are the worker are trusted about who is asking.
+    # Everyone else gets an ordinary sourced answer, which is what the page
+    # was for.
     # Clients that mirror the WhatsApp trigger send it through. The worker
     # strips it; the web page has nothing to mention, so it does not.
     question = intent.strip_trigger(req.question)
 
-    if intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
+    personal = req.private and trusted
+
+    if trusted and intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
         try:
-            if req.private:
+            if personal:
                 # In a direct message, "summarise" means "what did I miss",
                 # and we can answer that for this person specifically rather
                 # than handing them the same group digest as everybody else.
@@ -164,7 +179,7 @@ def ask(req: AskRequest) -> AskResponse:
                 answer=text,
                 sources=[],
                 meta={"duplicate": False, "summary": True,
-                      "personal": req.private, "covering": covering, "messages": count},
+                      "personal": personal, "covering": covering, "messages": count},
             )
         # Quiet period, or no model: answer it as an ordinary question.
 
@@ -173,7 +188,10 @@ def ask(req: AskRequest) -> AskResponse:
         question=question,
         user=req.user,
         group_id=req.group_id,
-        private=req.private,
+        # An untrusted caller cannot claim a question was asked privately:
+        # that flag decides what duplicate detection may repeat in front of
+        # the group, and it is not theirs to set.
+        private=personal,
     )
     return AskResponse(**result)
 

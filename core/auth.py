@@ -33,6 +33,18 @@ def configured() -> bool:
     return bool(os.environ.get("WORKER_TOKEN", "").strip())
 
 
+def is_worker(x_uniconnect_token: str = Header(default="")) -> bool:
+    """Did the caller prove it is the worker? Never raises.
+
+    For endpoints that serve everybody but must do less for a stranger.
+    /ask is public, and it has to stay that way for the web page, but a
+    request carrying the token can be trusted about who is asking.
+    """
+    expected = os.environ.get("WORKER_TOKEN", "").strip()
+    given = x_uniconnect_token.strip() if isinstance(x_uniconnect_token, str) else ""
+    return bool(expected) and hmac.compare_digest(given, expected)
+
+
 def require_worker(x_uniconnect_token: str = Header(default="")) -> None:
     """FastAPI dependency. Raises unless the caller knows the token."""
     expected = os.environ.get("WORKER_TOKEN", "").strip()

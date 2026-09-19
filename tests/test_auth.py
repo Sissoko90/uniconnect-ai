@@ -62,3 +62,17 @@ def test_configured_reports_the_truth(monkeypatch):
 
     monkeypatch.setenv("WORKER_TOKEN", "x")
     assert auth.configured() is True
+
+
+def test_is_worker_never_raises_and_fails_closed(monkeypatch):
+    """/ask is open to the internet and must keep answering strangers, so
+    this one returns a verdict instead of refusing. It still fails closed."""
+    monkeypatch.delenv("WORKER_TOKEN", raising=False)
+    assert auth.is_worker("anything") is False, "no token configured trusts nobody"
+
+    monkeypatch.setenv("WORKER_TOKEN", "the-real-secret")
+    assert auth.is_worker("the-real-secret") is True
+    assert auth.is_worker("  the-real-secret  ") is True
+    assert auth.is_worker("wrong") is False
+    assert auth.is_worker("") is False
+    assert auth.is_worker() is False
