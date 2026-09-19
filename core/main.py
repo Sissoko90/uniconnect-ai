@@ -361,6 +361,29 @@ def feedback(req: FeedbackRequest) -> dict:
 # --------------------------------------------------------------------------
 # Recaps and the daily digest
 # --------------------------------------------------------------------------
+
+
+def _needs_a_model(build):
+    """Run something that cannot work without the model, and fail readably.
+
+    /ask and /catchup degrade: past a failure they quote a sourced message
+    instead. A digest, a recap or a timeline has no such half-measure, so
+    these stop. What they must not do is stop with a 500 and a stack trace:
+    the usual cause is an expired key or an empty credit balance, and the
+    caller can fix either in a minute if the message says which.
+    """
+    try:
+        return build()
+    except Exception as exc:  # noqa: BLE001
+        print(f"model call failed: {exc}", flush=True)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "This needs the answering model and it is not responding. "
+                "Check the API key and the credit balance on the account. "
+                "Questions are still answered from search in the meantime."
+            ),
+        ) from exc
 #
 # The only two things the bot says without being asked. Both are generated
 # here and posted by the worker, never sent from here: the rule about when the
@@ -371,7 +394,7 @@ def feedback(req: FeedbackRequest) -> dict:
 def call_recap(source_id: str) -> dict:
     """Decisions, action items and open questions from one transcribed call."""
     limits.assert_budget(pool)
-    result = recap.call_recap(pool, source_id)
+    result = _needs_a_model(lambda: recap.call_recap(pool, source_id))
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
     return result
@@ -384,7 +407,7 @@ def latest_call_recap(group_id: str) -> dict:
     source_id = recap.latest_call(pool, group_id)
     if source_id is None:
         raise HTTPException(status_code=404, detail="no transcribed call for this group")
-    return recap.call_recap(pool, source_id)
+    return _needs_a_model(lambda: recap.call_recap(pool, source_id))
 
 
 @app.get("/digest/{group_id}", dependencies=[Depends(auth.require_worker)])
@@ -395,7 +418,7 @@ def daily_digest(group_id: str, day: str | None = None, lang: str | None = None)
     an error: the worker should post nothing rather than announce silence.
     """
     limits.assert_budget(pool)
-    return recap.daily_digest(pool, group_id, day, lang)
+    return _needs_a_model(lambda: recap.daily_digest(pool, group_id, day, lang))
 
 
 @app.get("/timeline/{group_id}", dependencies=[Depends(auth.require_worker)])
@@ -409,7 +432,7 @@ def group_timeline(group_id: str) -> dict:
     `empty` true means the group has not fixed any dates worth showing.
     """
     limits.assert_budget(pool)
-    result = timeline_engine.build(pool, group_id)
+    result = _needs_a_model(lambda: timeline_engine.build(pool, group_id))
     if "error" in result:
         raise HTTPException(status_code=503, detail=result["error"])
     return result

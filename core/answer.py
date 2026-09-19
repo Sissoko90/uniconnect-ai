@@ -548,6 +548,20 @@ def answer_question(
     # the group, this is what lets the bot reply "this was answered on the
     # 12th" instead of adding another copy of the same thread.
     if (dup := find_duplicate(pool, qvec, group_id, private)) is not None:
+        # Recorded like any other answer, even though it cost nothing.
+        #
+        # Returning early without recording looked harmless and was not. It
+        # let duplicates walk straight past the hourly limit, since that
+        # counts rows in this table: ask the same thing in twenty wordings and
+        # none of them count. It also hid every reused answer from the usage
+        # figures, and left the asker with nothing to put a thumb on.
+        #
+        # No usage is attached because no model was called, which is exactly
+        # what makes the spend figures still true.
+        record(
+            pool, question, dup["answer"], user, group_id,
+            dup["cited_ids"], qvec, private,
+        )
         return {
             "answer": dup["answer"],
             "sources": _as_sources(sources_of(pool, dup["cited_ids"])),
