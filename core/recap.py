@@ -19,6 +19,17 @@ from psycopg.rows import dict_row
 # a wall of text once a day is a bot the group mutes.
 DIGEST_MAX_MESSAGES = 400
 
+# The overview reads the whole history, so its ceiling is the model's context
+# rather than a phone screen. 4000 messages of group chat is well inside it,
+# and past that the oldest are dropped: in a group this age, what happened
+# last month matters more than what happened the month before.
+OVERVIEW_MAX_MESSAGES = 4000
+
+# One message, trimmed. Pasted agendas and programme announcements run to
+# thousands of characters and half a dozen of them would crowd out a hundred
+# ordinary messages, which is the opposite of what an overview needs.
+OVERVIEW_CHARS_PER_MESSAGE = 600
+
 RECAP_SYSTEM = """You are writing the recap of a call for the people who \
 missed it, from its transcript.
 
@@ -73,11 +84,51 @@ Plain text only, no markdown, no headings, no preamble."""
 # A bilingual group has no obvious digest language, and the model's guess
 # changes from one day to the next - which reads as the bot being erratic.
 # DIGEST_LANG pins it; unset, the model picks from the messages.
+OVERVIEW_SYSTEM = """You are explaining a large, busy WhatsApp group to \
+somebody who cannot follow it, from its whole history.
+
+They are not asking what happened yesterday. They are asking what this group \
+IS: what it is for, what has been going on, and what they need to know to \
+stop feeling lost in it. Assume they have read almost none of it.
+
+Produce these sections, each with its heading on its own line:
+
+What this group is
+  Two or three sentences. Its purpose, who is in it, what it is organised \
+around.
+
+What has been happening
+  The main threads of activity, most important first, as a short list. One \
+line each: the subject, where it stands, and who is driving it if that is \
+clear. Group related messages into a thread rather than listing messages.
+
+Dates that matter
+  Deadlines, events and meetings, past ones marked as past. Only dates \
+actually stated in the messages.
+
+Who does what
+  The handful of people whose role is clear from the messages, one line \
+each. Leave this out rather than guess.
+
+Still open
+  Questions asked and never answered, decisions not taken. Leave it out if \
+there are none.
+
+Write for somebody on a phone who is already overwhelmed: short lines, no \
+preamble, no closing offer of help. Plain text only, no markdown, no \
+asterisks, no headings marked with #. Do not number the messages and do not \
+cite them: this is an orientation, not an answer, and citation markers make \
+it unreadable.
+
+Say what is in the messages and nothing else. If the history does not show \
+what the group is for, say that instead of inventing a purpose."""
+
 DIGEST_LANG = os.environ.get("DIGEST_LANG", "").strip()
 
+# Worded without naming the digest, because the overview uses these too.
 LANGUAGE_RULE = {
-    "en": "Write the digest in English, whatever language the messages are in.",
-    "fr": "Rédige le digest en français, quelle que soit la langue des messages.",
+    "en": "Write it in English, whatever language the messages are in.",
+    "fr": "Rédige en français, quelle que soit la langue des messages.",
     "": "Reply in the language most of the messages are written in.",
 }
 
@@ -219,6 +270,81 @@ def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None =
     )
     result["lang"] = chosen or "auto"
     result["quiet"] = False
+    return result
+
+
+OVERVIEW_SQL = """
+select u.id, coalesce(p.display_name, u.author) as author, u.said_at,
+       left(u.content, %(chars)s) as content
+from utterances u
+join sources s on s.id = u.source_id
+left join people p on p.group_id = s.group_id and p.handle_norm = u.author_norm
+where s.group_id = %(group_id)s
+-- Newest first to decide what to drop, then put back in order below. A
+-- history too long for one prompt should lose its oldest messages, not its
+-- most recent ones.
+order by u.said_at desc
+limit %(limit)s
+"""
+
+
+def overview(pool, group_id: str, lang: str | None = None) -> dict:
+    """What this group is, from all of it, for somebody who cannot follow it.
+
+    The third kind of summary, and the one that was missing. A digest covers
+    the last day and a catch-up covers what one person has not read; both
+    answer "what changed". Somebody who has just joined, or who has let a
+    hundred unread messages pile up, is asking something else entirely:
+    what is this, what has been going on, where do I fit.
+
+    Asked for in exactly those words, twice: "je comprends rien et tout est
+    en désordre et trop de message juste fais moi un grand résumé que je
+    puisse me situer". The bot answered "nothing new since your last visit",
+    which was true of the question it heard and useless for the one asked.
+    """
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                OVERVIEW_SQL,
+                {
+                    "group_id": group_id,
+                    "limit": OVERVIEW_MAX_MESSAGES,
+                    "chars": OVERVIEW_CHARS_PER_MESSAGE,
+                },
+            )
+            rows = cur.fetchall()
+
+    rows.reverse()  # oldest first again: the story reads forwards
+
+    result = {"message_count": len(rows)}
+    if rows:
+        result["covering"] = rows[0]["said_at"].isoformat().replace("+00:00", "Z")
+
+    if not rows:
+        result["overview"] = None
+        result["empty"] = True
+        return result
+
+    if not answer_engine.generation_available():
+        result["overview"] = None
+        result["error"] = "no generation key configured"
+        return result
+
+    chosen = (lang or DIGEST_LANG or "").lower()
+    rule = LANGUAGE_RULE.get(chosen, LANGUAGE_RULE[""])
+
+    result["overview"] = _write(
+        f"{OVERVIEW_SYSTEM}\n\n{rule}",
+        answer_engine.format_messages(rows),
+        f"Explain this group to a newcomer, from the {len(rows)} messages above.",
+        # Longer than a digest on purpose. This one is read once, by somebody
+        # who has decided to sit down and understand the group, and cutting
+        # it to five lines would defeat the whole point of asking.
+        max_tokens=2000,
+        effort="high",
+    )
+    result["lang"] = chosen or "auto"
+    result["empty"] = False
     return result
 
 

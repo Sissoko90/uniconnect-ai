@@ -13,6 +13,7 @@ answers**, and nobody else sees any of it.
 | Ask a question, with citations | `@ask …` | just type it | yes |
 | The group's schedule | `@ask timeline` | `timeline` | yes |
 | A summary of the group | `@ask résumé` | see below | yes |
+| The whole group explained | `@ask résumé complet` | `résumé complet` | yes |
 | Your own catch-up | not applicable | `what did I miss` | no, see below |
 | Say an answer was wrong | react 👍 👎 | react 👍 👎 | the buttons under the answer |
 | Voice notes, transcribed and searchable | yes | yes | no |
@@ -137,6 +138,27 @@ what was decided, what needs you, and what is still open.
 The bot knows when you were last here because it sees you talking in the
 group. The first time you ask, it has no record and gives you the last two
 days, and it tells you that is what it did.
+
+### Understand the group from scratch
+
+For when you have just joined, or let a few hundred messages pile up and do
+not know where to start:
+
+```
+résumé complet
+un grand résumé, je comprends rien
+summarise everything
+give me the big picture
+```
+
+This is not the same as the two above and it is worth knowing which you are
+asking for. A digest is the last day. A catch-up is what you have not read.
+This one reads the entire history and explains the group: what it is for,
+the main threads and where each stands, the dates that matter, who does
+what, and what is still open.
+
+Ask for it once, sitting down, not on the way somewhere. It is longer than
+anything else the bot writes, deliberately.
 
 ### See the schedule
 

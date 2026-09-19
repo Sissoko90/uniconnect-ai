@@ -80,6 +80,39 @@ def wants_a_summary(question: str) -> bool:
     return not any(marker in lowered for marker in ABOUT_SOMETHING)
 
 
+# Asking for all of it, not for what changed.
+#
+# "Un résumé complet de tous les discussions sur le groupe car je comprends
+# rien et tout est en désordre et trop de message juste fais moi un grand
+# résumé que je puisse me situer" was answered with "nothing new since your
+# last visit". True of the question the bot heard, useless for the one asked:
+# a catch-up covers what one person has not read, and this person has read
+# none of it and is not asking what changed.
+COMPLETENESS = (
+    "complet", "complète", "complete", "entier", "entière", "intégral",
+    "general", "général", "globale", "global", "grand résumé", "grand resume",
+    "tout ce qui", "tout ce que", "toutes les discussions",
+    "tous les discussions", "toute la discussion", "depuis le début",
+    "depuis le debut", "everything", "whole", "full", "all of it",
+    "from the start", "from the beginning", "big picture", "me situer",
+    "comprends rien", "comprend rien", "perdu", "lost",
+)
+
+
+def wants_an_overview(question: str) -> bool:
+    """The whole group explained, rather than what has changed.
+
+    Checked before the catch-up and the digest, because somebody asking this
+    gets nothing useful from either: a digest shows them one day out of
+    months, and a catch-up shows them nothing at all once their bookmark is
+    up to date, which is exactly what happened.
+    """
+    lowered = question.lower()
+    if not any(phrase in lowered for phrase in SUMMARY_PHRASES):
+        return False
+    return any(marker in lowered for marker in COMPLETENESS)
+
+
 def wants_the_timeline(question: str) -> bool:
     """A request for the group's dates rather than a question about one.
 

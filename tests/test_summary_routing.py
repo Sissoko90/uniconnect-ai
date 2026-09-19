@@ -149,3 +149,43 @@ def test_the_schedule_wins_over_the_summary():
     the timeline first for exactly this reason."""
     assert intent.wants_the_timeline("planning")
     assert not intent.wants_a_summary("planning")
+
+
+# --------------------------------------------------------------------------
+# The whole group, for somebody who cannot follow it
+# --------------------------------------------------------------------------
+
+
+def test_asking_for_all_of_it_is_not_asking_what_changed():
+    """Sent twice, in these words, and answered with "Rien de nouveau depuis
+    votre dernier passage". True of the question the bot heard and useless
+    for the one asked: a catch-up covers what one person has not read, and
+    this person has read none of it."""
+    asked = [
+        "Fais moi un résumé complet de tous les discussions qui on eu lieu "
+        "sur le groupe de manière plus compréhensible claire et détaillé",
+        "Un résumé complet de tous les discussions sur le groupe car je "
+        "comprends rien et tout est en désordre et trop de message juste "
+        "fais moi un grand résumé que je puisse me situer",
+        "summarise everything that has been said here",
+        "give me a full summary of the group from the start",
+        "résumé général du groupe",
+    ]
+    for question in asked:
+        assert intent.wants_a_summary(question), question
+        assert intent.wants_an_overview(question), question
+
+
+def test_what_changed_is_still_what_changed():
+    """The overview must not swallow the other two. Somebody asking what
+    they missed wants their unread messages, not the history of the group."""
+    for question in ["quoi de neuf", "what did I miss", "catch me up",
+                     "résumé", "summary", "rattrapage"]:
+        assert intent.wants_a_summary(question), question
+        assert not intent.wants_an_overview(question), question
+
+
+def test_an_overview_needs_to_be_a_summary_request_first():
+    """"complet" on its own is not a request for anything."""
+    assert not intent.wants_an_overview("le dossier est complet")
+    assert not intent.wants_an_overview("everything is fine")

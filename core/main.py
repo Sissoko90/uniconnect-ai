@@ -180,8 +180,22 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
             print(f"timeline failed, answering as a question: {exc}", flush=True)
 
     if intent.wants_a_summary(question) and not limits.over_spend_cap(pool):
+        # An overview is about the group, not about the reader, so it is not
+        # the personal briefing even when it is asked for in a direct chat.
+        whole_group = intent.wants_an_overview(question)
         try:
-            if personal:
+            if whole_group:
+                # The whole group explained, for somebody who cannot follow
+                # it. Checked first because neither of the other two helps
+                # this person: a digest shows them one day out of months,
+                # and a catch-up shows them nothing once their bookmark is
+                # current. It needs no identity, so it works everywhere.
+                whole = recap.overview(pool, req.group_id, lang=None)
+                text, covering, count = (
+                    whole.get("overview"), whole.get("covering"),
+                    whole.get("message_count"),
+                )
+            elif personal:
                 # In a direct message, "summarise" means "what did I miss",
                 # and we can answer that for this person specifically rather
                 # than handing them the same group digest as everybody else.
@@ -221,7 +235,9 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                 answer=text,
                 sources=[],
                 meta={"duplicate": False, "summary": True,
-                      "personal": personal, "covering": covering, "messages": count},
+                      "overview": whole_group,
+                      "personal": personal and not whole_group,
+                      "covering": covering, "messages": count},
             )
         # Quiet period, or no model: answer it as an ordinary question.
 

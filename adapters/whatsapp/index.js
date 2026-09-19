@@ -85,6 +85,20 @@ const CATCHUP_PHRASES = [
   'rattrapage', 'resume moi', 'update me',
 ];
 
+// Asking for the whole group rather than for what changed. These go to the
+// API untouched, which reads the difference and answers with an overview.
+//
+// The distinction was missed twice in a row: "fais moi un grand résumé que
+// je puisse me situer" matched 'resume moi' here, went to the catch-up, and
+// came back "nothing new since your last visit" to somebody who had read
+// none of it.
+const OVERVIEW_MARKERS = [
+  'complet', 'complète', 'entier', 'intégral', 'général', 'generale',
+  'globale', 'grand résumé', 'tout ce qui', 'toutes les discussions',
+  'tous les discussions', 'depuis le début', 'me situer', 'comprends rien',
+  'everything', 'whole', 'full summary', 'from the start', 'big picture',
+];
+
 const TIMELINE_PHRASES = [
   'timeline', 'schedule', 'roadmap', 'planning', 'calendrier', 'agenda',
 ];
@@ -401,7 +415,7 @@ async function handleGroup(sock, msg, text, sender) {
 async function handlePrivate(sock, msg, text, sender) {
   // In private the bot always answers. This half of the product costs the
   // group nothing, which is exactly why it is allowed to be talkative.
-  if (matches(text, CATCHUP_PHRASES)) {
+  if (matches(text, CATCHUP_PHRASES) && !matches(text, OVERVIEW_MARKERS)) {
     const result = await api.catchup(sender, GROUP_ID, text);
     const lead = result.first_time
       ? 'I had no record of your last visit, so here are the last two days.\n\n'
