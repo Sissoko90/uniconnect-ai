@@ -171,12 +171,26 @@ const { answer, sources, meta } = await r.json();
 > detection that speaks in front of the group. Without it, the bot could
 > announce to everyone that somebody asked something in private.
 
-`sources` is an array of `{author, said_at, excerpt, permalink}`. Show at
-least the first one, a citation is what separates this from a chatbot that
-makes things up. Something like:
+`sources` is an array of `{author, said_at, excerpt, permalink, kind}`, in
+the order the answer cites them, so `[2]` in the text is `sources[1]`. A
+citation is what separates this from a chatbot that makes things up.
+
+**Show them all, not just the first.** An answer usually rests on several,
+and naming one of them credits a single person for what five sources said.
+An answer about the demo video, built from the official guide and four
+messages, went out signed with one member's phone number.
+
+`kind` is `chat`, `call` or `document`, and it changes how a source should
+be named. A document is named and not dated: "the UniPods Video Demo Guide"
+is what tells the reader this is the official rule rather than somebody's
+recollection, and the day it was written tells them nothing. A person is
+named and dated, because in a chat, when something was said is half of what
+it means.
 
 ```
-{answer}, {sources[0].author}, {date of sources[0].said_at}
+{answer}
+
+- UniPods Video Demo Guide · Steven, 18 Sept
 ```
 
 `meta.duplicate === true` means this was already answered; `meta.answered_at`

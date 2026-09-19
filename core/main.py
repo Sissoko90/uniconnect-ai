@@ -103,6 +103,11 @@ class Source(BaseModel):
     said_at: str
     excerpt: str
     permalink: str | None = None
+    # 'chat', 'call' or 'document'. Additive and defaulted, so a client that
+    # does not know about it is unaffected. It exists because attributing a
+    # document to a phone number, which is what happened, misrepresents where
+    # an answer came from and throws away the most convincing thing about it.
+    kind: str = "chat"
 
 
 class AskRequest(BaseModel):

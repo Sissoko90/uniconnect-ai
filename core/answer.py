@@ -685,6 +685,11 @@ def _as_sources(hits: list[dict]) -> list[dict]:
             "said_at": h["said_at"].isoformat().replace("+00:00", "Z"),
             "excerpt": h["content"].strip()[:280],
             "permalink": h["permalink"],
+            # So a client can say "from the UniPods Video Demo Guide" rather
+            # than printing the document's title where a person's name goes.
+            # An answer drawn from an official document is more trustworthy
+            # than one drawn from a message, and the reader should see that.
+            "kind": h.get("kind") or "chat",
         }
         for h in hits
     ]

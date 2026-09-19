@@ -173,6 +173,26 @@ const FIRST_TIME_HINT =
   'React 👍 or 👎 to any answer. A 👎 retires it, so it stops being reused ' +
   'when somebody asks the same thing.';
 
+const SOURCES_SHOWN = 3;
+
+/** One source, named the way a reader would name it.
+ *
+ * A document is named and not dated: "the UniPods Video Demo Guide" is the
+ * useful thing to know, and the date it was written tells the reader
+ * nothing. A person is named and dated, because in a chat, when something
+ * was said is half of what it means.
+ */
+function credit(source) {
+  if (source.kind === 'document') return source.author;
+  if (source.kind === 'call') return `${source.author} (call)`;
+
+  const when = new Date(source.said_at).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+  });
+  return `${source.author}, ${when}`;
+}
+
 /** Format an answer for a phone: the answer, then where it came from.
  *
  * The [1] markers are stripped. They are meaningful on the web page, which
@@ -180,8 +200,6 @@ const FIRST_TIME_HINT =
  * where one attribution line sits under the answer and nothing is numbered.
  */
 function withSources(result) {
-  const source = result.sources?.[0];
-
   // The timeline is drawn in code with aligned columns. WhatsApp only keeps
   // that alignment inside a fenced block, and the citation markers are not
   // stripped from it because there are none to strip.
@@ -191,12 +209,21 @@ function withSources(result) {
 
   let text = (result.answer || '').replace(/\s*\[\d+\]/g, '');
 
-  if (source) {
-    const when = new Date(source.said_at).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-    });
-    text += `\n\n- ${source.author}, ${when}`;
+  // Every source the answer used, not just the first.
+  //
+  // An answer about the demo video, built from the official guide and four
+  // messages, went out signed "+229…56, 18 Sept". That names one person for
+  // work five sources did, hides the document that made it trustworthy, and
+  // puts a stranger's phone number under a claim they did not make.
+  //
+  // Capped at three: the point is to show what it rests on, not to print a
+  // bibliography under every answer on a phone.
+  const sources = result.sources || [];
+  if (sources.length) {
+    const named = [...new Set(sources.slice(0, SOURCES_SHOWN).map(credit))];
+    const more = sources.length - SOURCES_SHOWN;
+    text += `\n\n- ${named.join(' · ')}`;
+    if (more > 0) text += ` and ${more} more`;
   }
 
   if (result.meta?.first_answer) text += `\n\n${FIRST_TIME_HINT}`;

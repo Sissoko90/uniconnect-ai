@@ -70,6 +70,10 @@
     margin-bottom: 14px;
   }
   .who { font-size: .85rem; color: var(--muted); margin-bottom: 3px; }
+  .tag {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  }
   .who b { color: var(--fg); font-weight: 600; }
   .quote { font-size: .92rem; white-space: pre-wrap; }
   /* The timeline is drawn in code with aligned columns, so it needs a
@@ -179,11 +183,21 @@
       : data.meta?.duplicate
         ? '<div class="flag">already answered before</div>' : "";
 
-    const sources = (data.sources || []).map((s, i) => `
+    // A document is named, not dated. Its title is what tells the reader it
+    // is the official guide rather than somebody's recollection, and the day
+    // it was written tells them nothing.
+    const sources = (data.sources || []).map((s, i) => {
+      const origin = s.kind === "document"
+        ? `<span class="tag">document</span>`
+        : s.kind === "call"
+          ? `<span class="tag">call</span> · ${when(s.said_at)}`
+          : `· ${when(s.said_at)}`;
+      return `
       <div class="source">
-        <div class="who">[${i + 1}] <b>${escape(s.author)}</b> · ${when(s.said_at)}</div>
+        <div class="who">[${i + 1}] <b>${escape(s.author)}</b> ${origin}</div>
         <div class="quote">${escape(s.excerpt)}</div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
 
     // The timeline arrives as a drawing with aligned columns. Wrapping it
     // like prose turns it into nonsense.
