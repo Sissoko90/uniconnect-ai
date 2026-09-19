@@ -64,6 +64,25 @@ if (PAIR_NUMBER && existsSync(AUTH_DIR)) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Baileys logs its whole protocol conversation at info level: pre-key
+// uploads, app state sync, history notifications, hundreds of lines. The one
+// thing this tool exists to print, the group id, scrolls past in the middle
+// of it. Warnings and errors still come through, so a real failure is not
+// hidden, only the running commentary.
+//
+// Written out rather than pulled from pino, which is Baileys' own dependency
+// and not ours to import.
+const quiet = {
+  level: process.env.BAILEYS_LOG || 'warn',
+  child: () => quiet,
+  trace: () => {},
+  debug: () => {},
+  info: () => {},
+  warn: (...args) => console.error(...args),
+  error: (...args) => console.error(...args),
+  fatal: (...args) => console.error(...args),
+};
+
 // Asked once per run. After a pairing the socket reconnects, and asking again
 // on the new one would request a second code nobody needs.
 let askedForCode = false;
@@ -73,6 +92,7 @@ async function connect() {
 
   const sock = makeWASocket({
     auth: state,
+    logger: quiet,
     // With a pairing code the QR is noise: it scrolls the code out of view.
     printQRInTerminal: false,
     // Baileys cycles a few QR references and then gives up with "QR refs
