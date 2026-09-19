@@ -18,7 +18,13 @@ from psycopg.rows import dict_row
 
 # A digest longer than a phone screen does not get read, and a bot that posts
 # a wall of text once a day is a bot the group mutes.
-DIGEST_MAX_MESSAGES = 400
+# What the digest reads. A cap is needed because a very busy day would
+# otherwise send thousands of messages to the model, and beyond a point more
+# input does not make five better lines.
+#
+# It is the most recent four hundred, never the first four hundred. See the
+# ordering in DIGEST_SQL.
+DIGEST_MAX_MESSAGES = int(os.environ.get("DIGEST_MAX_MESSAGES", "400"))
 
 # The overview reads the whole history, so its ceiling is the model's context
 # rather than a phone screen. 4000 messages of group chat is well inside it,
@@ -165,7 +171,13 @@ left join people p on p.group_id = s.group_id and p.handle_norm = u.author_norm
 where s.group_id = %(group_id)s
   and u.said_at >= %(since)s
   and u.said_at < %(until)s
-order by u.said_at
+-- Newest first, then put back in order below.
+--
+-- Ascending with a limit kept the OLDEST four hundred messages of the day
+-- and threw away the rest, so on a busy day the digest posted at 07:00
+-- described the previous morning and was blind to the evening: the freshest
+-- and most useful part of it, and the part people had actually missed.
+order by u.said_at desc
 limit %(limit)s
 """
 
@@ -269,6 +281,8 @@ def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None =
                 },
             )
             rows = cur.fetchall()
+
+    rows.reverse()  # oldest first again: a digest reads forwards
 
     result = {
         "since": since.isoformat().replace("+00:00", "Z"),
