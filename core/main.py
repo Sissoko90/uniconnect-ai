@@ -14,6 +14,7 @@ features land behind them.
   GET  /alerts/.. who was named in the group and has not come back to it
   GET  /recap/... decisions and action items from a transcribed call
   GET  /digest/.. five lines on the last 24 hours
+  GET  /overview/ what the group is, from all of its history
   GET  /timeline/ the group's schedule, drawn from what it actually said
   GET  /metrics   usage, as JSON
   GET  /metrics/page  the same, as a page for the judges
@@ -697,6 +698,17 @@ def daily_digest(group_id: str, day: str | None = None, lang: str | None = None)
     """
     limits.assert_budget(pool)
     return _needs_a_model(lambda: recap.daily_digest(pool, group_id, day, lang))
+
+
+@app.get("/overview/{group_id}", dependencies=[Depends(auth.require_worker)])
+def group_overview(group_id: str, lang: str | None = None) -> dict:
+    """The whole group explained, from all of its history.
+
+    Reachable through /ask by asking for it in words, which is how members
+    get it. This is for the worker, which posts it once as the group's
+    introduction to the bot and should not have to fake a question to do so.
+    """
+    return _needs_a_model(lambda: recap.overview(pool, group_id, lang=lang))
 
 
 @app.get("/timeline/{group_id}", dependencies=[Depends(auth.require_worker)])

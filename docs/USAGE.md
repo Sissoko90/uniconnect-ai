@@ -86,9 +86,18 @@ hours. The answer is already on the screen just above.
 
 ### Every morning
 
-At 07:00 UTC it posts five lines on what happened since the day before, each
-one citing the message it came from. If the day was quiet, it posts nothing
-rather than announcing the silence.
+**The first morning is different.** The very first thing the bot posts is
+the whole group explained from its entire history: what this group is for,
+the threads of activity and where each stands, the dates that matter, who
+does what, and what is still open. It says so, and it says that from
+tomorrow it will only post what changed.
+
+That happens once. Posting the full history every morning would repeat
+itself daily and be muted by the end of the week.
+
+Every morning after that, at 07:00 UTC, it posts five lines on what happened
+since the day before, each one citing the message it came from. If the day
+was quiet, it posts nothing rather than announcing the silence.
 
 The hour is chosen for the spread of the group, which runs from UTC+0 to
 UTC+3: nobody gets it before 7am their time, nobody after 10am.

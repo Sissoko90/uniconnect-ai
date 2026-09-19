@@ -662,28 +662,74 @@ async function deliverAlerts(sock) {
 // that hour are not rare, systemd restarts this worker on any failure.
 const DIGEST_STATE = new URL('.digest-state', import.meta.url).pathname;
 
-function lastDigestDay() {
+/**
+ * What the morning job has already done.
+ *
+ * Two facts, in one small file: the last day a digest went out, and whether
+ * the group has ever been introduced to the bot. The introduction is the
+ * whole history explained, posted once and never again; every morning after
+ * that is the ordinary five lines.
+ *
+ * The first thing 153 people ever see from this bot should tell them what it
+ * knows. Posting the full history every morning instead would repeat itself
+ * daily and be muted by the end of the week.
+ */
+function digestState() {
   try {
-    return readFileSync(DIGEST_STATE, 'utf8').trim();
+    const raw = readFileSync(DIGEST_STATE, 'utf8').trim();
+    // The file used to hold a bare date. Read that as "already introduced":
+    // a group the bot has been posting to for days does not need an
+    // introduction, and sending one would look like a malfunction.
+    if (!raw.startsWith('{')) return { day: raw, introduced: true };
+    return JSON.parse(raw);
   } catch {
-    return null; // never posted, or the file was removed
+    return { day: null, introduced: false }; // never posted
   }
+}
+
+function saveDigestState(state) {
+  writeFileSync(DIGEST_STATE, JSON.stringify(state));
 }
 
 /** Five lines, once a day, in the group. Checked every ten minutes. */
 async function maybePostDigest(sock) {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
+  const state = digestState();
 
   if (now.getUTCHours() !== DIGEST_HOUR_UTC) return;
-  if (lastDigestDay() === today) return;
+  if (state.day === today) return;
+
+  // The first morning: what this group is, from all of its history. After
+  // that, only what changed since yesterday.
+  if (!state.introduced) {
+    const whole = await api.overview(GROUP_ID, process.env.DIGEST_LANG || null);
+    if (whole.overview) {
+      await humanPause();
+      await sock.sendMessage(GROUP_JID, {
+        text:
+          `${whole.overview}\n\n` +
+          'That is everything I have read in this group. From tomorrow I will ' +
+          'post five lines each morning on what changed. Ask me anything in ' +
+          'private, any time.',
+      });
+      saveDigestState({ day: today, introduced: true });
+      console.log('introduction posted');
+      return;
+    }
+    // No overview, no introduction, and the day stays unmarked so the next
+    // check tries again. Falling through to the digest would skip the
+    // introduction for good.
+    console.log('overview unavailable, will introduce tomorrow');
+    return;
+  }
 
   const result = await api.digest(GROUP_ID, process.env.DIGEST_LANG || 'en');
 
   // A quiet day is a result, not an error. Announcing silence is noise, and
   // the day counts as done: there is nothing to retry.
   if (result.quiet || !result.digest) {
-    writeFileSync(DIGEST_STATE, today);
+    saveDigestState({ day: today, introduced: true });
     console.log('quiet day, no digest posted');
     return;
   }
@@ -703,7 +749,7 @@ async function maybePostDigest(sock) {
   // no digest was ever posted. Anything thrown above leaves the day unmarked,
   // so the next check ten minutes later tries again, for as long as the
   // digest hour lasts.
-  writeFileSync(DIGEST_STATE, today);
+  saveDigestState({ day: today, introduced: true });
   console.log('digest posted');
 }
 

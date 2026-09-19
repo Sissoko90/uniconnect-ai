@@ -104,3 +104,9 @@ export const surveySent = (groupId, user, messageId) =>
 // caller knows not to rate it as an ordinary answer as well.
 export const surveyRating = (messageId, helpful) =>
   call('POST', '/survey/rating', { body: { message_id: messageId, helpful } });
+
+/** What the group is, from all of its history. Slow: it reads everything. */
+export const overview = (groupId, lang) =>
+  call('GET', `/overview/${encodeURIComponent(groupId)}${lang ? `?lang=${lang}` : ''}`, {
+    timeout: SLOW_MS,
+  });
