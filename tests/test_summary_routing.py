@@ -220,3 +220,22 @@ def test_a_question_about_a_call_is_not_a_recap_request():
     answer, and it cites the message that fixed the date."""
     for question in ["when is the next call", "quel est le lien du meeting"]:
         assert not intent.wants_a_call_recap(question), question
+
+
+def test_a_plain_request_can_be_served_from_a_copy():
+    """It costs about 25 cents and a minute of waiting to build. Everybody
+    asking for the standard thing should get the same recent text."""
+    for question in ["résumé complet", "summarise everything",
+                     "un grand résumé, je comprends rien",
+                     "Fais moi un résumé complet de tous les discussions sur le groupe"]:
+        assert not intent.asks_for_more(question), question
+
+
+def test_a_request_that_names_something_is_written_for_them():
+    """"and the links to the past meeting" adds a section answering exactly
+    that. Serving it to the next person would answer a question they never
+    put."""
+    for question in ["le résumé complet et les liens du meet passé",
+                     "résumé complet et les dates importantes",
+                     "summary of everything about the MIT course"]:
+        assert intent.asks_for_more(question), question

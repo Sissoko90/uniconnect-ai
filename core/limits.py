@@ -93,13 +93,55 @@ def recent_identical(pool, user: str, question: str) -> dict | None:
     return {"answer": row[0], "cited_ids": row[1]} if row else None
 
 
+def record_usage(pool, kind: str, group_id: str | None, usage) -> None:
+    """Log what one non-question model call cost.
+
+    Answers keep their usage on the answer row. Everything else, the digest,
+    the call recap, the timeline, the catch-up and the whole-group overview,
+    had nowhere to put it and was therefore invisible to the cap below. The
+    overview is the most expensive call in the project: it sends nine hundred
+    messages to the model. A hundred and fifty members asking for one each
+    would cost forty dollars against a ten dollar cap that never saw a cent
+    of it.
+
+    Best effort, like record(): a failure to write the ledger must never cost
+    somebody their digest.
+    """
+    if not usage:
+        return
+    try:
+        with pool.connection() as conn:
+            conn.execute(
+                """insert into model_usage
+                     (kind, group_id, input_tokens, output_tokens)
+                   values (%s, %s, %s, %s)""",
+                (
+                    kind,
+                    group_id,
+                    getattr(usage, "input_tokens", None),
+                    getattr(usage, "output_tokens", None),
+                ),
+            )
+    except Exception:  # noqa: BLE001 - accounting is not worth an outage
+        pass
+
+
 def spend_today_usd(pool) -> float:
-    """What generation has cost since midnight UTC, from reported usage."""
+    """What every model call has cost since midnight UTC, from reported usage.
+
+    Both ledgers. Counting only the answers, which is what this did, left the
+    cap blind to the calls that cost the most.
+    """
     with pool.connection() as conn:
         row = conn.execute(
             """select coalesce(sum(input_tokens), 0), coalesce(sum(output_tokens), 0)
-               from answers
-               where asked_at >= date_trunc('day', now() at time zone 'utc')""",
+               from (
+                 select input_tokens, output_tokens from answers
+                 where asked_at >= date_trunc('day', now() at time zone 'utc')
+                 union all
+                 select input_tokens, output_tokens from model_usage
+                 where used_at >= date_trunc('day', now() at time zone 'utc')
+               ) all_calls""",
         ).fetchone()
 
     input_tokens, output_tokens = row

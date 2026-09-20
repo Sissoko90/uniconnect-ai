@@ -57,3 +57,71 @@ def test_a_long_message_without_links_is_just_cut():
 
     assert out.endswith("...")
     assert len(out) == recap.OVERVIEW_CHARS_PER_MESSAGE + 3
+
+
+# --------------------------------------------------------------------------
+# Not paying twice for the same overview
+# --------------------------------------------------------------------------
+
+
+class FakeCursor:
+    def __init__(self, row):
+        self.row = row
+
+    def execute(self, sql, params=()):
+        return self
+
+    def fetchone(self):
+        return self.row
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class FakePool:
+    def __init__(self, row=None):
+        self.cur = FakeCursor(row)
+
+    def connection(self):
+        return self
+
+    def cursor(self, row_factory=None):
+        return self.cur
+
+    def execute(self, sql, params=()):
+        return self.cur.execute(sql, params)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def cached(utterances):
+    return {"text": "the group explained", "built_at": None, "utterances": utterances}
+
+
+def test_a_cached_overview_is_reused_while_the_history_has_barely_moved():
+    """It costs about 25 cents and a minute of waiting, and its subject is
+    months of history. A hundred and fifty members asking once each would be
+    forty dollars for a hundred and fifty near-identical texts."""
+    pool = FakePool(row=cached(900))
+
+    assert recap._cached_overview(pool, "meti-cohort-1", "fr", 905) is not None
+
+
+def test_enough_new_messages_make_it_stale():
+    """Staleness is measured in messages, not minutes: what makes this text
+    wrong is the group having said things it does not mention. A quiet week
+    should not expire an accurate overview, and a busy hour should."""
+    pool = FakePool(row=cached(900))
+
+    assert recap._cached_overview(pool, "meti-cohort-1", "fr", 1000) is None
+
+
+def test_nothing_cached_yet():
+    assert recap._cached_overview(FakePool(row=None), "meti-cohort-1", "fr", 900) is None

@@ -102,6 +102,41 @@ COMPLETENESS = (
 )
 
 
+# Words that are part of asking for a summary rather than part of what is
+# being asked about. What is left after removing them is the caller's own
+# subject, if they had one.
+REQUEST_FILLER = frozenset(
+    {
+        "fais", "faire", "donne", "donner", "donnes", "peux", "pourrais",
+        "veux", "voudrais", "moi", "me", "un", "une", "le", "la", "les",
+        "des", "du", "de", "et", "que", "qui", "quoi", "est", "sur", "dans",
+        "pour", "avec", "ce", "cette", "ces", "je", "tu", "il", "elle",
+        "nous", "vous", "puisse", "situer", "stp", "svp", "merci", "please",
+        "give", "get", "make", "want", "would", "could", "can", "the", "a",
+        "an", "of", "on", "in", "for", "and", "that", "this", "about", "up",
+        "some", "thanks", "hi", "hello", "bonjour", "salut",
+    }
+)
+
+
+def asks_for_more(question: str) -> bool:
+    """Does this request name a subject of its own, beyond "summarise"?
+
+    "Résumé complet" asks for the standard thing and any recent copy answers
+    it. "Le résumé complet et les liens du meet passé" asks for something
+    extra, so it has to be written for them and must never be served from a
+    copy made for somebody else.
+
+    Biased towards saying yes. Treating a plain request as a specific one
+    costs money and still answers correctly; the other way round answers a
+    question the person never asked.
+    """
+    words = set(re.findall(r"[\w']+", question.lower()))
+    for phrase in (*SUMMARY_PHRASES, *COMPLETENESS):
+        words -= set(re.findall(r"[\w']+", phrase))
+    return bool(words - REQUEST_FILLER - WHOLE_GROUP)
+
+
 def wants_an_overview(question: str) -> bool:
     """The whole group explained, rather than what has changed.
 

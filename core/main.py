@@ -244,10 +244,15 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                 # pins the daily digest posted to the whole group, where
                 # there is no one asker to follow; here there is, and
                 # letting it win answered a French request in English.
+                # The question is passed on only when it names something
+                # of its own. A plain "résumé complet" is answered from the
+                # cached text, which costs nothing and arrives at once; a
+                # request that also asks for, say, the meeting links has to
+                # be written for that person and must never be reused.
                 whole = recap.overview(
                     pool, req.group_id,
                     lang=answer_engine.detect_lang(question),
-                    question=question,
+                    question=question if intent.asks_for_more(question) else None,
                 )
                 text, covering, count = (
                     whole.get("overview"), whole.get("covering"),

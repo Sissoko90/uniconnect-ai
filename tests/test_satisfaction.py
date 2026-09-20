@@ -138,3 +138,14 @@ def test_asked_is_recorded_with_the_message_it_was_sent_as():
 
     assert pool.cur.params == ("meti-cohort-1", "22370000000@s.whatsapp.net", "WA-ID")
     assert "on conflict" in pool.cur.sql, "asking the same person twice must be impossible"
+
+
+def test_the_summary_query_is_not_assembled_from_strings():
+    """Bandit caught this and it was right. The pasted fragment was a fixed
+    literal and never user input, but SQL built by string formatting is the
+    shape of the bug, and it leaves a template for whoever edits it next."""
+    import inspect
+
+    source = inspect.getsource(satisfaction.summary)
+    assert 'f"""select' not in source
+    assert "%(group_id)s" in source

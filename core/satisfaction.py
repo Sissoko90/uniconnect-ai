@@ -125,15 +125,21 @@ def summary(pool, group_id: str | None = None) -> dict:
     No group_id means every group, which is how the rest of the metrics are
     counted.
     """
-    where = "where group_id = %s" if group_id else ""
+    # One static statement rather than a where clause pasted in. The value
+    # was a fixed literal and never user input, but SQL assembled by string
+    # formatting is the shape of the bug, and the next person to edit this
+    # would have had a template to follow. The null check does the same job
+    # with the group id as an ordinary parameter.
     with pool.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             row = cur.execute(
-                f"""select count(*) as asked,
-                           count(rating) as answered,
-                           count(*) filter (where rating > 0) as positive
-                      from satisfaction {where}""",
-                (group_id,) if group_id else (),
+                """select count(*) as asked,
+                          count(rating) as answered,
+                          count(*) filter (where rating > 0) as positive
+                     from satisfaction
+                    where %(group_id)s::text is null
+                       or group_id = %(group_id)s""",
+                {"group_id": group_id},
             ).fetchone()
 
     answered = row["answered"] or 0
