@@ -177,8 +177,12 @@ const TOPIC_TTL_MS = 6 * 60 * 60 * 1000;
 // to fill the journal with it.
 const warnedAbout = new Set();
 
-// How many group messages we have stored since this process started.
+// How many group messages we have stored since this process started, and
+// how many the handler has been given in total. The difference between the
+// two is every message dropped on purpose, and it is the number that was
+// missing all week.
 let ingested = 0;
+let seen = 0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -397,6 +401,21 @@ async function handleReaction(event) {
 }
 
 async function handle(sock, msg) {
+  // Logged before any decision about the message.
+  //
+  // Without this, "nothing arrived" and "something arrived and was dropped"
+  // are indistinguishable from the journal, and every drop below is silent
+  // by design: our own messages, other bots, other groups, messages with no
+  // text. Three separate faults this week were each diagnosed twice over
+  // for want of that distinction, and one of them wrongly.
+  //
+  // No content and no author: this is 390 people's conversation and the
+  // journal is readable by anybody with a shell on the machine.
+  seen += 1;
+  console.log(
+    `message ${seen} (${isGroup(msg.key.remoteJid || '') ? 'group' : 'private'}` +
+      `${msg.key.fromMe ? ', ours' : ''}, ${ingested} kept)`
+  );
   // Never answer ourselves. Two bots in one group will otherwise talk to each
   // other all night, and the bill arrives in the morning.
   if (msg.key.fromMe) return;
@@ -477,9 +496,6 @@ async function ingestText(msg, text, sender, when) {
     // of it: this is 153 people's private conversation and the journal is
     // readable by anybody with a shell on the box.
     ingested += 1;
-    if (ingested === 1 || ingested % 25 === 0) {
-      console.log(`${ingested} group messages ingested since start`);
-    }
   } catch (error) {
     console.error('ingest failed:', error.message);
   }
