@@ -43,6 +43,13 @@ NOISE = re.compile(
     re.IGNORECASE,
 )
 
+# Invisible characters WhatsApp puts inside message text: the LTR mark it
+# writes around the brackets, and the directional isolates it wraps a mention
+# in. Typing "@ask" makes it a mention candidate, so what is written to the
+# export is "@\u2068ask\u2069", and a word with one of these inside it is not
+# the word the index holds.
+INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+
 # Traffic between the group and the bot, which is not group content.
 #
 # Seen in a private chat the morning after launch: "what is the submission
@@ -147,7 +154,11 @@ def parse(path: str, tz_name: str) -> list[dict]:
                 messages[-1]["content"] += "\n" + line
             continue
 
-        rest = m.group("rest").replace("‎", "").strip()
+        # Invisible marks WhatsApp scatters through message text: the LTR
+        # mark it puts around the brackets, and the directional isolates it
+        # wraps a mention in. "@ask" arrives as "@\u2068ask\u2069", and a
+        # word with one of these inside it is not the word the index holds.
+        rest = INVISIBLE.sub("", m.group("rest")).strip()
         author, sep, content = rest.partition(": ")
         if not sep or NOISE.search(rest):
             continue  # system line, not something a person said

@@ -19,6 +19,20 @@ import re
 # "@ask" ends up inside the question where it is just noise in the search.
 TRIGGER = re.compile(r"^\s*@ask\b[:,]?\s*", re.IGNORECASE)
 
+# Invisible characters WhatsApp puts inside message text: bidirectional
+# isolates and embeddings, zero width spaces, the byte order mark.
+#
+# Typing "@ask" makes WhatsApp treat it as a mention and wrap the word in
+# U+2068 and U+2069, so what arrives is "@\u2068ask\u2069 what is ...". The
+# trigger above does not match that, and neither would anything else looking
+# for a word: the characters sit inside words, not around them.
+#
+# Stripped here as well as in the worker, because the web page and any other
+# client can paste the same text, and because a question carrying them
+# searches badly: "hackathon" with an isolate in the middle is not the token
+# the index holds.
+INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
+
 SUMMARY_PHRASES = (
     "summary", "summarise", "summarize", "sum up", "overview", "recap",
     "what's happening", "whats happening", "what is happening", "catch me up",
@@ -66,7 +80,8 @@ WHOLE_GROUP = frozenset(
 
 
 def strip_trigger(question: str) -> str:
-    """Remove a leading @ask, leaving the question itself."""
+    """Remove a leading @ask and any invisible marks, leaving the question."""
+    question = INVISIBLE.sub("", question)
     stripped = TRIGGER.sub("", question).strip()
     return stripped or question
 

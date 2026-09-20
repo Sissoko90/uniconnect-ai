@@ -239,3 +239,25 @@ def test_a_request_that_names_something_is_written_for_them():
                      "résumé complet et les dates importantes",
                      "summary of everything about the MIT course"]:
         assert intent.asks_for_more(question), question
+
+
+def test_whatsapp_hides_directional_marks_inside_the_trigger():
+    """The reason @ask never worked in a group for two days.
+
+    Typing "@ask" makes WhatsApp treat it as a mention and wrap the word in
+    U+2068 and U+2069, so the message that arrives is "@\u2068ask\u2069 what
+    is ...". Nothing looking for a word matches that: the characters sit
+    inside the word, not around it. In a private chat there is no trigger to
+    recognise, which is why that half worked perfectly and hid it.
+    """
+    arrived = "@\u2068ask\u2069 what is this hackathon about ?"
+
+    assert intent.strip_trigger(arrived) == "what is this hackathon about ?"
+
+
+def test_marks_elsewhere_in_a_question_are_removed_too():
+    """A word with an isolate inside it is not the token the index holds, so
+    a question carrying them searches badly even once it is routed."""
+    assert intent.strip_trigger("quelle est la \u2068date\u2069 limite") == (
+        "quelle est la date limite"
+    )

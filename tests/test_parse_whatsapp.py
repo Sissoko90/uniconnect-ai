@@ -134,3 +134,19 @@ def test_the_conversation_with_the_bot_is_not_group_content(tmp_path):
 def test_language_detection():
     assert p.detect_lang("Bonjour, je cherche le lien du call") == "fr"
     assert p.detect_lang("Where is the recording") == "en"
+
+
+def test_directional_isolates_around_a_mention_are_stripped(tmp_path):
+    """WhatsApp treats "@ask" as a mention and writes it wrapped in U+2068
+    and U+2069. The export then carries a word nothing matches: not the bot
+    filter below, and not the search index either."""
+    export = (
+        "[19/09/2026, 09:32:08] Steven: @\u2068ask\u2069 what is the deadline\n"
+        "[19/09/2026, 09:34:00] Makan: the \u2068deadline\u2069 is Thursday\n"
+    )
+
+    messages = parse(tmp_path, export)
+
+    # The first is a question put to the bot and is dropped, which only works
+    # once the isolates are gone.
+    assert [m["content"] for m in messages] == ["the deadline is Thursday"]

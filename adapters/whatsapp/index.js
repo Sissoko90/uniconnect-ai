@@ -150,6 +150,18 @@ const quiet = {
 };
 const humanPause = () => sleep(MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));
 
+// Invisible characters WhatsApp puts inside message text: bidirectional
+// isolates and embeddings, zero width spaces, the byte order mark.
+//
+// This is not cosmetic. Typing "@ask" makes WhatsApp treat it as a mention
+// and wrap the word in U+2068 and U+2069, so the message that arrives is
+// "@\u2068ask\u2069 what is this hackathon about", and startsWith('@ask')
+// is false. The bot therefore ignored every @ask ever sent in a group,
+// indexed the question as ordinary group content, and said nothing. In a
+// private chat there is no trigger to recognise, which is why that half
+// worked perfectly and hid the problem for two days.
+const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+
 /** The text of a message, whatever shape WhatsApp wrapped it in. */
 function textOf(msg) {
   const m = msg.message || {};
@@ -159,7 +171,9 @@ function textOf(msg) {
     m.imageMessage?.caption ||
     m.videoMessage?.caption ||
     ''
-  ).trim();
+  )
+    .replace(INVISIBLE, '')
+    .trim();
 }
 
 /** Who sent it: the participant in a group, the chat itself in a direct message. */
