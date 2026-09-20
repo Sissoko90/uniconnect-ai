@@ -37,6 +37,18 @@ OVERVIEW_MAX_MESSAGES = 4000
 # ordinary messages, which is the opposite of what an overview needs.
 OVERVIEW_CHARS_PER_MESSAGE = 600
 
+# How hard the model thinks before writing the overview.
+#
+# "high" took a minute and fifteen seconds on nine hundred messages, which is
+# a long time to watch "typing..." on a phone. "medium" is the default
+# because this prompt dictates the whole plan of the text, section by
+# section, so there is less for the model to work out on its own than the
+# length of the answer suggests.
+#
+# Raise it to "high" if the result reads thin. It is an env var so that can
+# be tried without a deploy.
+OVERVIEW_EFFORT = os.environ.get("OVERVIEW_EFFORT", "medium")
+
 RECAP_SYSTEM = """You are writing the recap of a call for the people who \
 missed it, from its transcript.
 
@@ -428,7 +440,7 @@ def overview(pool, group_id: str, lang: str | None = None, question: str | None 
         # prompt thinks hardest of any of them. At 2000 the answer stopped
         # mid-bullet, having spent the rest working out what to say.
         max_tokens=16000,
-        effort="high",
+        effort=OVERVIEW_EFFORT,
     )
     result["lang"] = chosen or "auto"
     result["empty"] = False
