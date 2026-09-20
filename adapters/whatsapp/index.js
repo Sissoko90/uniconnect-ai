@@ -451,6 +451,40 @@ async function ingestVoice(sock, msg, sender, when) {
  * refreshed on a timer rather than sent once. Cleared in a finally, so a
  * failed request does not leave the bot apparently typing forever.
  */
+// Said when the API could not be reached or gave up. Short, honest, and not
+// an apology: the person is waiting for an answer, not for contrition.
+const BROKE = {
+  en:
+    'Something went wrong on my side and I could not finish that one. Try ' +
+    'again in a moment, or ask it more narrowly.',
+  fr:
+    "Quelque chose a échoué de mon côté et je n'ai pas pu terminer. Réessaie " +
+    'dans un instant, ou pose la question plus précisément.',
+};
+
+// Rough, and it only picks which of two sentences to send. The real language
+// detection lives in the API, which cannot help here because the API is the
+// thing that just failed.
+const looksFrench = (text) =>
+  /[àâçéèêëîïôùû]|\b(le|la|les|des|une|est|pour|quoi|qui|pourrais|donne)\b/i.test(text);
+
+/** Run something, and say so if it fails instead of going quiet.
+ *
+ * A request that throws used to end the handler silently. The person had
+ * watched "typing..." for half a minute and then got nothing, which reads as
+ * a bot that ignored them: worse than an error, because they do not know
+ * whether to ask again.
+ */
+async function answerOrExplain(sock, msg, text, work) {
+  try {
+    return await work();
+  } catch (error) {
+    console.error('answering failed:', error.message);
+    await reply(sock, msg, BROKE[looksFrench(text) ? 'fr' : 'en']);
+    return null;
+  }
+}
+
 async function whileThinking(sock, jid, work) {
   const show = () => sock.sendPresenceUpdate('composing', jid).catch(() => {});
   await show();
@@ -472,9 +506,12 @@ async function handleGroup(sock, msg, text, sender) {
     return;
   }
 
-  const result = await whileThinking(sock, msg.key.remoteJid, () =>
-    api.ask(question, sender, GROUP_ID, false)
+  const result = await answerOrExplain(sock, msg, question, () =>
+    whileThinking(sock, msg.key.remoteJid, () =>
+      api.ask(question, sender, GROUP_ID, false)
+    )
   );
+  if (!result) return;
 
   // Once per topic. The second person to ask gets the answer; the fifth gets
   // silence, because by then it is on the screen just above them.
@@ -495,9 +532,12 @@ async function handlePrivate(sock, msg, text, sender) {
   // In private the bot always answers. This half of the product costs the
   // group nothing, which is exactly why it is allowed to be talkative.
   if (matches(text, CATCHUP_PHRASES) && !matches(text, OVERVIEW_MARKERS)) {
-    const result = await whileThinking(sock, msg.key.remoteJid, () =>
-      api.catchup(sender, GROUP_ID, text)
+    const result = await answerOrExplain(sock, msg, text, () =>
+      whileThinking(sock, msg.key.remoteJid, () =>
+        api.catchup(sender, GROUP_ID, text)
+      )
     );
+    if (!result) return;
     const lead = result.first_time
       ? 'I had no record of your last visit, so here are the last two days.\n\n'
       : '';
@@ -506,9 +546,10 @@ async function handlePrivate(sock, msg, text, sender) {
   }
 
   if (matches(text, TIMELINE_PHRASES)) {
-    const result = await whileThinking(sock, msg.key.remoteJid, () =>
-      api.timeline(GROUP_ID)
+    const result = await answerOrExplain(sock, msg, text, () =>
+      whileThinking(sock, msg.key.remoteJid, () => api.timeline(GROUP_ID))
     );
+    if (!result) return;
     await reply(
       sock,
       msg,
@@ -519,9 +560,12 @@ async function handlePrivate(sock, msg, text, sender) {
     return;
   }
 
-  const result = await whileThinking(sock, msg.key.remoteJid, () =>
-    api.ask(text, sender, GROUP_ID, true)
+  const result = await answerOrExplain(sock, msg, text, () =>
+    whileThinking(sock, msg.key.remoteJid, () =>
+      api.ask(text, sender, GROUP_ID, true)
+    )
   );
+  if (!result) return;
   await reply(sock, msg, withSources(result));
 }
 

@@ -20,6 +20,17 @@ const TOKEN = process.env.WORKER_TOKEN || '';
 const SLOW_MS = 30000;
 const FAST_MS = 10000;
 
+// Reading the group's whole history is in another category. Nine hundred
+// messages, and the model thinking about all of them before it writes.
+//
+// /ask inherits this because a request for the whole-group overview arrives
+// as an ordinary question and the worker cannot know which it is until the
+// answer comes back. At thirty seconds it aborted, the model finished and
+// billed the tokens anyway, and the person who had watched "typing..." for
+// half a minute got nothing at all. A long ceiling costs nothing when the
+// answer is quick.
+const VERY_SLOW_MS = 180000;
+
 async function call(method, path, { body, timeout = FAST_MS } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -55,7 +66,7 @@ export const health = () => call('GET', '/health');
 export const ask = (question, user, groupId, privateChat) =>
   call('POST', '/ask', {
     body: { question, user, group_id: groupId, private: privateChat },
-    timeout: SLOW_MS,
+    timeout: VERY_SLOW_MS,
   });
 
 /** What one person missed. Moves their bookmark, so never call it to preview. */
@@ -108,5 +119,5 @@ export const surveyRating = (messageId, helpful) =>
 /** What the group is, from all of its history. Slow: it reads everything. */
 export const overview = (groupId, lang) =>
   call('GET', `/overview/${encodeURIComponent(groupId)}${lang ? `?lang=${lang}` : ''}`, {
-    timeout: SLOW_MS,
+    timeout: VERY_SLOW_MS,
   });
