@@ -72,6 +72,46 @@ async def embed_loop():
             print(f"embedded {n} live messages", flush=True)
 
 
+# Every table this code reads. A migration that was written and never
+# applied is invisible until somebody asks the right question.
+EXPECTED_TABLES = (
+    "sources",
+    "utterances",
+    "answers",
+    "people",
+    "mentions",
+    "user_state",
+    "satisfaction",
+    "model_usage",
+    "overview_cache",
+)
+
+
+def check_schema() -> None:
+    try:
+        with pool.connection(timeout=10) as conn:
+            present = {
+                row[0]
+                for row in conn.execute(
+                    "select tablename from pg_tables where schemaname = 'public'"
+                ).fetchall()
+            }
+    except Exception as exc:  # noqa: BLE001 - the health endpoint covers this
+        print(f"could not check the schema: {exc}", flush=True)
+        return
+
+    missing = [t for t in EXPECTED_TABLES if t not in present]
+    if missing:
+        print(
+            f"MISSING TABLES: {', '.join(missing)}. Apply the migrations in "
+            "db/migrations, oldest first, or these features will fail one "
+            "request at a time with nothing to explain why.",
+            flush=True,
+        )
+    else:
+        print(f"schema complete, {len(present)} tables", flush=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
@@ -85,6 +125,19 @@ async def lifespan(app: FastAPI):
     # restart, the moment the database answers again.
     pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=10, open=False)
     pool.open()
+
+    # Say at once if the database is missing something this code needs.
+    #
+    # Three tables were absent for an hour and a half and the API started
+    # perfectly. It failed one request at a time instead: the survey poll
+    # every five minutes, and every question, because the spend cap reads a
+    # table that was not there. Nothing said why, and the only symptom
+    # anybody saw was a bot that had stopped answering.
+    #
+    # A warning rather than a refusal to start. Refusing would take the bot
+    # off the air over a table that half the features do not touch, and the
+    # point here is to name the problem, not to make it worse.
+    asyncio.create_task(asyncio.to_thread(check_schema))
 
     embedder = asyncio.create_task(embed_loop())
     yield

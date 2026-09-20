@@ -579,7 +579,41 @@ Restore:
 gunzip -c ~/uniconnect-2026-09-20.sql.gz | docker compose exec -T db psql -U uniconnect -d uniconnect
 ```
 
-### Resetting the database
+### Updating a running deployment
+
+```bash
+cd /opt/uniconnect-ai
+git pull
+
+# Every migration, oldest first. All of them are safe to run twice; the ones
+# already applied print a NOTICE and change nothing.
+for m in db/migrations/*.sql; do
+  echo "=== $m"
+  docker compose exec -T db psql -U uniconnect -d uniconnect -v ON_ERROR_STOP=1 -f - < "$m"
+done
+
+docker compose up -d --build api
+sudo systemctl restart uniconnect-bot
+```
+
+**Run the migrations before rebuilding the API**, and do not skip them
+because the pull looked small. `db/schema.sql` is applied once, when the
+data volume is created, and never again, so a new table only exists on a
+running deployment if a migration put it there.
+
+Three of them were missed once. The API started perfectly and then failed
+one request at a time: the survey poll every five minutes, and every
+question, because the spend cap reads a table that was not there. Nothing
+said why for an hour and a half, and the only symptom anybody saw was a bot
+that had stopped answering. The API now prints `MISSING TABLES: ...` at
+startup, which is the first thing to look for when something stops working
+after an update:
+
+```bash
+docker compose logs api | grep -e "MISSING TABLES" -e "schema complete"
+```
+
+## Resetting the database
 
 `db/schema.sql` only runs on a fresh volume. To apply a schema change while
 the data is still disposable:
