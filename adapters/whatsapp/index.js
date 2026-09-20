@@ -86,6 +86,19 @@ const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC || 7);
 // Answers to @ask are unaffected: those were invited.
 const POSTS_IN_GROUP = process.env.DIGEST_ENABLED !== 'false';
 
+// Post the introduction as soon as the bot connects, instead of waiting for
+// the digest hour. For the day the bot joins the group: nobody wants to
+// wait until tomorrow morning to show the group what it does.
+//
+// It runs once. The state file marks the day as done the moment the message
+// goes out, so a restart with the flag still set changes nothing, and the
+// morning job takes over from tomorrow. Remove the line afterwards anyway.
+//
+// A flag rather than a separate script, because a second Baileys process
+// sharing this session throws the worker off WhatsApp, which has already
+// cost us the paired session three times.
+const INTRODUCE_NOW = process.env.INTRODUCE_NOW === 'true';
+
 // A number that answers in 200 milliseconds, every time, at four in the
 // morning, is a number Meta blocks. The pause costs nothing and it is the
 // cheapest insurance we have against losing the account outright.
@@ -673,6 +686,10 @@ function startBackgroundJobs(sock) {
     ALERT_INTERVAL_MS
   );
   setInterval(() => maybePostDigest(sock).catch((e) => console.error(e.message)), 10 * 60_000);
+  // Once at startup as well. Without it, INTRODUCE_NOW still waits for the
+  // first tick of the timer, which is ten minutes of wondering whether the
+  // flag worked.
+  maybePostDigest(sock).catch((e) => console.error(e.message));
 }
 
 const SURVEY = {
@@ -799,7 +816,11 @@ async function maybePostDigest(sock) {
   const state = digestState();
 
   if (!POSTS_IN_GROUP) return;
-  if (now.getUTCHours() !== DIGEST_HOUR_UTC) return;
+  // The hour, unless we were told to introduce the bot straight away and it
+  // has not been introduced yet.
+  if (now.getUTCHours() !== DIGEST_HOUR_UTC && !(INTRODUCE_NOW && !state.introduced)) {
+    return;
+  }
   if (state.day === today) return;
 
   // The first morning: what this group is, from all of its history. After
