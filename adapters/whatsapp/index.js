@@ -372,7 +372,15 @@ async function handle(sock, msg) {
 
   const sender = senderOf(msg);
   // Another bot. Not indexed, not answered, not cited.
-  if (IGNORED.has(sender)) return;
+  if (IGNORED.has(sender)) {
+    // Said once per sender. An over-broad IGNORED_JIDS silences real people
+    // and looks exactly like the bot being broken.
+    if (!warnedAbout.has(sender)) {
+      warnedAbout.add(sender);
+      console.warn(`ignoring ${sender}: it is in IGNORED_JIDS`);
+    }
+    return;
+  }
   const when = Number(msg.messageTimestamp);
 
   // A voice note: the most invisible thing in the group. Store it and say
@@ -512,7 +520,26 @@ async function whileThinking(sock, jid, work) {
 }
 
 async function handleGroup(sock, msg, text, sender) {
-  if (!text.toLowerCase().startsWith('@ask')) return; // silent, by design
+  if (!text.toLowerCase().startsWith('@ask')) {
+    // Silent, by design. But say so when the message looks like somebody
+    // was trying to call the bot and the trigger did not fire, with the
+    // exact bytes of the opening.
+    //
+    // This is what two days of "@ask does nothing" needed and did not have.
+    // WhatsApp wraps a mention in invisible directional isolates, so the
+    // text was "@\u2068ask\u2069 ..." and nothing matched; from the outside
+    // that is indistinguishable from a bot that is switched off, from one
+    // in the wrong group, and from one whose API is down.
+    if (/ask/i.test(text.slice(0, 12))) {
+      const bytes = [...text.slice(0, 8)]
+        .map((c) => c.codePointAt(0).toString(16))
+        .join(' ');
+      console.warn(`group message looks like a call but did not trigger: [${bytes}]`);
+    }
+    return;
+  }
+
+  console.log('@ask in the group, answering');
 
   const question = text.slice(4).trim();
   if (!question) {
