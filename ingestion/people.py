@@ -99,6 +99,12 @@ def show_missing(group_id: str, dsn: str) -> None:
                left join people p
                  on p.group_id = s.group_id and p.handle_norm = u.author_norm
                where s.group_id = %s and p.id is null
+                 -- Chat only. A document is attributed to its own title and
+                 -- a call to the call, on purpose: neither is a person and
+                 -- neither needs a name. "UniPods Video Demo Guide, 16
+                 -- messages" at the top of a list of people to identify is
+                 -- a small thing that makes the whole list look wrong.
+                 and s.kind = 'chat'
                group by u.author
                order by n desc
                limit 30""",
