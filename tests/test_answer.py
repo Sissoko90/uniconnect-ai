@@ -388,3 +388,36 @@ def test_context_can_be_turned_off(monkeypatch):
 )
 def test_the_language_of_the_question(question, lang):
     assert answer.detect_lang(question) == lang
+
+
+def test_a_phone_number_inside_a_message_is_masked():
+    """Authors have been masked since the first day; the text of a message
+    never was. Asked who the community admin is, the bot answered "the phone
+    number +250 783 188 655", taken from a message another bot had posted,
+    and printed it again in the whole-group overview next to two names."""
+    masked = answer.mask_numbers("the phone number +250 783 188 655 is the admin")
+
+    assert "783 188 655" not in masked
+    assert "+250" in masked and "55" in masked
+
+
+def test_meeting_ids_and_links_survive():
+    """A masked meeting link is useless to everybody, and finding one is the
+    single thing people ask this bot for most."""
+    untouched = [
+        "Meeting ID 419 860 837 373 470, passcode g2Z7gc7Q",
+        "https://teams.microsoft.com/meet/419860837373470?p=jYchWkDZnC4etsclnK",
+        "the deadline is 18 October 2026",
+        "+5",
+    ]
+    for text in untouched:
+        assert answer.mask_numbers(text) == text
+
+
+def test_everything_generated_goes_through_one_door():
+    """Six places produce text for 390 people. Remembering to call two
+    functions at each of them is a rule that will be broken."""
+    out = answer.safe_to_send("Call +250 783 188 655 — today")
+
+    assert "783 188" not in out
+    assert "—" not in out

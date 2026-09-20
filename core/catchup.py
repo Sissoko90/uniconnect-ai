@@ -177,7 +177,7 @@ def _summarise(rows: list[dict], question: str | None, truncated: bool) -> str:
         output_config={"effort": "medium"},
         messages=[{"role": "user", "content": prompt}],
     )
-    return answer_engine.plain_dashes(
+    return answer_engine.safe_to_send(
         "".join(b.text for b in response.content if b.type == "text").strip()
     )
 

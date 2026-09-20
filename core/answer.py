@@ -156,6 +156,38 @@ ACCENT_WEIGHT = 2
 _anthropic = None
 
 
+# A phone number written inside a message, as opposed to the author of one.
+#
+# Authors have been masked since the first day. The text of a message never
+# was, so when somebody posted a coordinator's number in the group, the bot
+# read it back out in full: "the phone number +250 783 188 655", and again
+# in the whole-group overview next to two names. That is the exact failure
+# we were about to point at in a rival bot.
+#
+# The leading + is required. Meeting IDs and passcodes in this group are
+# long digit runs too ("419 860 837 373 470") and they are meant to be
+# reproduced: a masked meeting link is useless to everybody.
+# Named apart from the PHONE below, which matches a whole author field
+# and is anchored. Two constants called PHONE in one module meant this
+# one was silently replaced by the other and matched nothing.
+PHONE_IN_TEXT = re.compile(r"\+\d[\d\s.\-()]{7,17}\d")
+
+
+def mask_numbers(text: str) -> str:
+    """Hide the middle of any phone number written in a message.
+
+    Enough is left to recognise a number you already know, and not enough
+    to call somebody who did not give you their number. Same shape as the
+    masking on authors, so a citation and a quote agree.
+    """
+
+    def hide(match):
+        digits = re.sub(r"\D", "", match.group())
+        return f"+{digits[:3]}…{digits[-2:]}" if len(digits) > 6 else match.group()
+
+    return PHONE_IN_TEXT.sub(hide, text)
+
+
 def plain_dashes(text: str) -> str:
     """Take the long dashes out of anything the model wrote.
 
@@ -169,6 +201,16 @@ def plain_dashes(text: str) -> str:
     """
     text = re.sub(r"\s*[—–]\s+", ", ", text)
     return re.sub(r"[—–]", "-", text)
+
+
+def safe_to_send(text: str) -> str:
+    """Everything applied to generated text before anybody reads it.
+
+    Both passes belong here rather than at each call site: there are six
+    places that produce text for 390 people and remembering to call two
+    functions at each of them is a rule that will be broken.
+    """
+    return mask_numbers(plain_dashes(text))
 
 
 def detect_lang(text: str) -> str:
@@ -486,7 +528,9 @@ def format_messages(hits: list[dict]) -> str:
     lines = []
     for i, h in enumerate(hits, start=1):
         when = h["said_at"].strftime("%d %b %Y at %H:%M UTC")
-        content = h["content"].strip().replace("</group_messages>", "</group_messages >")
+        content = mask_numbers(
+            h["content"].strip().replace("</group_messages>", "</group_messages >")
+        )
 
         # A document and a chat message are not the same kind of evidence and
         # were being presented identically, with the document's title sitting
@@ -534,7 +578,7 @@ def generate(question: str, hits: list[dict]) -> tuple[str, list[int], dict]:
         messages=[{"role": "user", "content": prompt}],
     )
 
-    text = plain_dashes(
+    text = safe_to_send(
         "".join(b.text for b in response.content if b.type == "text").strip()
     )
     cited = sorted({int(n) for n in re.findall(r"\[(\d+)\]", text) if 1 <= int(n) <= len(hits)})

@@ -16,6 +16,7 @@ Three things happen per message, all of them idempotent:
     has by definition seen the group
 """
 
+import os
 import re
 from datetime import datetime
 
@@ -87,10 +88,48 @@ def readable_author(handle: str) -> str:
     return f"+{match.group(1)}" if match else handle
 
 
+# Other teams' bots, by the name WhatsApp shows for them.
+#
+# Their messages must never be stored, because a stored message is a
+# message that can be cited. On the day a rival bot was tested in the
+# group, ours answered "Per the bot's reply in the group: yes, you can
+# still move forward..." and cited it: another bot's invention, relayed as
+# something the group had said. It also read out a coordinator's phone
+# number that the same bot had published.
+#
+# Matched on the displayed name rather than the JID, because a JID has to
+# be looked up and pasted into a config before it can be blocked, which is
+# a thing nobody does until after the damage. The list is extended with
+# IGNORED_AUTHORS, comma separated.
+BOT_NAMES = {
+    name.strip().casefold()
+    for name in (
+        "meti_bot,Nexus Bot,PodPal,UniConnect-BOT,"
+        + os.environ.get("IGNORED_AUTHORS", "")
+    ).split(",")
+    if name.strip()
+}
+
+
+def written_by_a_bot(message: dict) -> bool:
+    """A bot's own words, including ours. Never stored, never cited."""
+    name = (message.get("author_name") or "").strip().casefold()
+    if name in BOT_NAMES:
+        return True
+    # A name ending in "bot" is one, whatever the organiser asked teams to
+    # call theirs, and every team was asked to end its bot's name that way.
+    return name.endswith(" bot") or name.endswith("-bot") or name.endswith("_bot")
+
+
 def store(pool, group_id: str, messages: list[dict]) -> dict:
     """Returns how many were new. Safe to call with messages already stored."""
+    received = len(messages)
+    messages = [m for m in messages if not written_by_a_bot(m)]
+    if len(messages) < received:
+        print(f"dropped {received - len(messages)} messages from other bots", flush=True)
+
     if not messages:
-        return {"received": 0, "stored": 0}
+        return {"received": received, "stored": 0}
 
     times = [m["said_at"] for m in messages]
 

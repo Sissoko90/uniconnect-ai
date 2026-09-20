@@ -248,7 +248,7 @@ def _write(
     if pool is not None and kind:
         limits.record_usage(pool, kind, group_id, getattr(response, "usage", None))
 
-    return answer_engine.plain_dashes(
+    return answer_engine.safe_to_send(
         "".join(b.text for b in response.content if b.type == "text").strip()
     )
 
