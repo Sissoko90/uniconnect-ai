@@ -835,10 +835,20 @@ function digestState() {
     // The file used to hold a bare date. Read that as "already introduced":
     // a group the bot has been posting to for days does not need an
     // introduction, and sending one would look like a malfunction.
-    if (!raw.startsWith('{')) return { day: raw, introduced: true };
-    return JSON.parse(raw);
+    const state = raw.startsWith('{') ? JSON.parse(raw) : { day: raw, introduced: true };
+
+    // Which group it is about. Without this the state was global, and
+    // moving the bot from the test group to the real one carried both
+    // facts across: the morning of the launch it had already introduced
+    // itself to seven people, so it believed the day was done and said
+    // nothing to the three hundred and ninety it had just joined.
+    //
+    // A different group has never been introduced to and its day is not
+    // done, whatever was written here for the last one.
+    if (state.group !== GROUP_JID) return { group: GROUP_JID, day: null, introduced: false };
+    return state;
   } catch {
-    return { day: null, introduced: false }; // never posted
+    return { group: GROUP_JID, day: null, introduced: false }; // never posted
   }
 }
 
@@ -873,7 +883,7 @@ async function maybePostDigest(sock) {
           'changed, and nothing else. Demain matin je posterai cinq lignes ' +
           'sur ce qui a changé, et rien de plus.',
       });
-      saveDigestState({ day: today, introduced: true });
+      saveDigestState({ group: GROUP_JID, day: today, introduced: true });
       console.log('introduction posted');
       return;
     }
@@ -889,7 +899,7 @@ async function maybePostDigest(sock) {
   // A quiet day is a result, not an error. Announcing silence is noise, and
   // the day counts as done: there is nothing to retry.
   if (result.quiet || !result.digest) {
-    saveDigestState({ day: today, introduced: true });
+    saveDigestState({ group: GROUP_JID, day: today, introduced: true });
     console.log('quiet day, no digest posted');
     return;
   }
@@ -909,7 +919,7 @@ async function maybePostDigest(sock) {
   // no digest was ever posted. Anything thrown above leaves the day unmarked,
   // so the next check ten minutes later tries again, for as long as the
   // digest hour lasts.
-  saveDigestState({ day: today, introduced: true });
+  saveDigestState({ group: GROUP_JID, day: today, introduced: true });
   console.log('digest posted');
 }
 
