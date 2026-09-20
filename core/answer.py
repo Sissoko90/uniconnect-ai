@@ -20,7 +20,13 @@ import limits
 from psycopg.rows import dict_row
 
 CANDIDATES = 40  # per search arm, before fusion
-TOP_K = 6        # what Claude actually reads
+# What Claude actually reads, before the neighbouring messages are added.
+#
+# Six was too few once documents were in the corpus. "What is this hackathon
+# about" came back citing one chat message, without the prize, the problem
+# or the entry rules, because the brief that states all three did not fit in
+# six slots against nine hundred messages that mention the hackathon.
+TOP_K = int(os.environ.get("TOP_K", "10"))
 RRF_K = 60       # reciprocal rank fusion constant, the usual default
 
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5")
@@ -73,8 +79,19 @@ things people ask this bot for, and a described link answers nothing.
 Cite every claim with the number of the message it comes from, like [2]. A \
 sentence carrying a fact with no number on it is a bug.
 
-Write for a phone screen: three sentences at most, no preamble. Do not greet \
-the reader and do not describe what you are about to do.
+Write for a phone screen, and let the question decide the length. A question \
+with one fact as its answer gets one or two sentences; nobody wants a \
+paragraph to learn a date. A question that asks what something IS, or to \
+explain or compare, needs enough to actually answer it: the main points, \
+the numbers, the constraints, as short lines starting with "- " when there \
+are three or more. Never more than about two hundred words.
+
+"What is this hackathon about" answered in three sentences left out the \
+prize, the problem it exists to solve and the rules for entering, all of \
+which were in the messages. Brevity that drops the answer is not brevity.
+
+No preamble. Do not greet the reader and do not describe what you are about \
+to do.
 
 PLAIN TEXT ONLY. No markdown of any kind: no **bold**, no ## headings, no \
 backticks. This is sent to WhatsApp, which does not render markdown - \
@@ -276,8 +293,22 @@ order by
   -- ever be found by its words, and it was being buried while sitting at
   -- rank 1 of the full text arm. "When is the rehearsal?", asked a minute
   -- after somebody answered it, found nothing.
-  case when coalesce(vec.rank, 99) <= 2 or coalesce(fts.rank, 99) <= 2
-       then 0 else 1 end,
+  case
+    when coalesce(vec.rank, 99) <= 2 or coalesce(fts.rank, 99) <= 2 then 0
+    -- Then a document or a call transcript that either arm ranked well.
+    --
+    -- There are a handful of these against nine hundred chat messages, and
+    -- they are the authoritative ones: a rule read from the brief beats the
+    -- same rule remembered by a member. "What is this hackathon about" came
+    -- back without the prize or the entry rules because the brief lost six
+    -- slots to messages that merely mention the hackathon.
+    --
+    -- It still has to have been ranked: a document nobody's search found is
+    -- not promoted, so this cannot drag in an unrelated one.
+    when s.kind <> 'chat'
+     and (coalesce(vec.rank, 99) <= 8 or coalesce(fts.rank, 99) <= 8) then 1
+    else 2
+  end,
   score desc
 limit %(limit)s
 """
