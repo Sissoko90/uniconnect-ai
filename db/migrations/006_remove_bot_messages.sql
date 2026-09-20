@@ -32,13 +32,19 @@ where s.id = u.source_id
   and (u.author ~* '(^|[^a-z])bot([^a-z]|$)' or u.author ilike 'meti\_bot' or
        u.author ilike '%podpal%' or u.author ilike '%uniconnect%');
 
--- Answers that cited one of them are now citing rows that no longer exist,
--- and a citation pointing at nothing is worse than no citation. They were
--- our own test answers from the same day; the group has not seen them.
-delete from answers
-where cited_ids is not null
-  and not exists (
-    select 1 from utterances u where u.id = any(cited_ids)
+-- Answers that cited one of them are now citing a row that no longer
+-- exists, and a citation pointing at nothing is worse than no citation.
+-- They were our own test answers from the same day; the group has not seen
+-- them, and duplicate detection would otherwise serve them for thirty days.
+--
+-- ANY missing source is enough. The first version of this asked whether
+-- none of the cited rows survived, which kept every answer that cited one
+-- bot and one member: exactly the answers this is here to remove.
+delete from answers a
+where a.cited_ids is not null
+  and exists (
+    select 1 from unnest(a.cited_ids) as cited
+    where not exists (select 1 from utterances u where u.id = cited)
   );
 
 select count(*) as utterances_remaining from utterances;
