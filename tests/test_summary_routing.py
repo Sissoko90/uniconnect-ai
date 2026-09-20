@@ -261,3 +261,28 @@ def test_marks_elsewhere_in_a_question_are_removed_too():
     assert intent.strip_trigger("quelle est la \u2068date\u2069 limite") == (
         "quelle est la date limite"
     )
+
+
+def test_words_the_group_actually_used_during_the_other_team_test():
+    """Asked in the group on 20 September and matched by nothing, so they
+    went to retrieval and searched for messages about being new."""
+    for question in ["what is new today?", "what's new", "du nouveau ?"]:
+        assert intent.wants_a_summary(question), question
+        assert not intent.wants_an_overview(question), question
+
+
+def test_asking_what_the_bot_knows_is_asking_for_everything():
+    """"Describe everything you know about METI AI Innovation Program",
+    asked the same day. Somebody asking what the bot knows wants the whole
+    picture, not six retrieved messages."""
+    question = "Describe everything you know about METI AI Innovation Program"
+
+    assert intent.wants_a_summary(question)
+    assert intent.wants_an_overview(question)
+
+
+def test_asking_about_one_subject_is_still_a_question():
+    """The distinction has to survive: "what do you know about Wadhwani" is
+    answered with the messages about Wadhwani, and cites them."""
+    assert not intent.wants_a_summary("what do you know about Wadhwani")
+    assert not intent.wants_a_summary("tu sais quelque chose sur le visa ?")

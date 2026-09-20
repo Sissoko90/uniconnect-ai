@@ -46,6 +46,15 @@ SUMMARY_PHRASES = (
     # nothing. The worker had its own list and the API did not share it.
     "what did i miss", "what have i missed", "update me", "bring me up",
     "j'ai raté", "j'ai rate", "ai-je raté", "rattrapage", "rattraper",
+    # "What is new today" was asked in the group during another team's
+    # testing day and matched nothing here, so it went to retrieval and
+    # searched for messages on the subject of being new. The worker knew
+    # these words and the API did not, again.
+    "what's new", "whats new", "what is new", "anything new", "du nouveau",
+    # "Describe everything you know about the programme", also asked that
+    # day. Somebody asking what the bot knows is asking for the whole
+    # picture, and COMPLETENESS then routes it to the overview.
+    "everything you know", "all you know", "tout ce que tu sais",
 )
 
 # The group's schedule, drawn from the dates in its own messages. Same words
