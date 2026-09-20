@@ -99,6 +99,43 @@ const POSTS_IN_GROUP = process.env.DIGEST_ENABLED !== 'false';
 // cost us the paired session three times.
 const INTRODUCE_NOW = process.env.INTRODUCE_NOW === 'true';
 
+// Who the bot says it is. The same name avatar.js writes to the WhatsApp
+// profile, so the message and the contact card agree.
+const BOT_NAME = process.env.BOT_NAME || 'UniConnect-BOT';
+const TEAM_NAME = process.env.TEAM_NAME || 'UniConnect';
+
+/** The first thing the group ever reads from the bot.
+ *
+ * Written here rather than asked of the model: it has to be exact, it
+ * costs nothing, and it says the same thing every time. The model writes
+ * what follows, which is the group's own history.
+ *
+ * Bilingual, and not as a courtesy. Half this group works in French, and
+ * its own history records them saying they are served less well than the
+ * anglophone members. Introducing itself in both languages says more about
+ * what this bot is for than any sentence claiming it.
+ */
+function introduction() {
+  return (
+    `Hello, I am ${BOT_NAME}, built by team ${TEAM_NAME}.\n\n` +
+    'I have read everything said in this group, plus the hackathon brief ' +
+    'and the video guide. Two ways to use me:\n\n' +
+    `- In the group: write @ask then your question. I answer only when ` +
+    'called, never otherwise.\n' +
+    '- In private: just write to me, no @ask needed, and nobody else sees ' +
+    'it. That is where I am most useful.\n\n' +
+    `Bonjour, je suis ${BOT_NAME}, développé par l'équipe ${TEAM_NAME}.\n\n` +
+    "J'ai lu tout ce qui s'est dit dans ce groupe, ainsi que le brief du " +
+    'hackathon et le guide vidéo. Deux façons de me parler :\n\n' +
+    '- Dans le groupe : écris @ask puis ta question. Je ne réponds que si ' +
+    'on m’appelle, jamais autrement.\n' +
+    '- En privé : écris moi directement, sans @ask, et personne d’autre ne ' +
+    'le voit. C’est là que je sers le plus.\n\n' +
+    'Voici ce que je sais de ce groupe.\n\n' +
+    '- - -'
+  );
+}
+
 // A number that answers in 200 milliseconds, every time, at four in the
 // morning, is a number Meta blocks. The pause costs nothing and it is the
 // cheapest insurance we have against losing the account outright.
@@ -831,10 +868,10 @@ async function maybePostDigest(sock) {
       await humanPause();
       await sock.sendMessage(GROUP_JID, {
         text:
-          `${whole.overview}\n\n` +
-          'That is everything I have read in this group. From tomorrow I will ' +
-          'post five lines each morning on what changed. Ask me anything in ' +
-          'private, any time.',
+          `${introduction()}\n\n${whole.overview}\n\n- - -\n\n` +
+          'From tomorrow I will post five lines each morning on what ' +
+          'changed, and nothing else. Demain matin je posterai cinq lignes ' +
+          'sur ce qui a changé, et rien de plus.',
       });
       saveDigestState({ day: today, introduced: true });
       console.log('introduction posted');

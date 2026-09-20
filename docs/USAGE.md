@@ -86,11 +86,16 @@ hours. The answer is already on the screen just above.
 
 ### Every morning
 
-**The first morning is different.** The very first thing the bot posts is
-the whole group explained from its entire history: what this group is for,
-the threads of activity and where each stands, the dates that matter, who
-does what, and what is still open. It says so, and it says that from
-tomorrow it will only post what changed.
+**The first morning is different.** The very first thing the bot posts
+introduces itself in both languages, says which team built it and how to
+talk to it, and then explains the whole group from its entire history: what
+this group is for, the threads of activity and where each stands, the dates
+that matter, who does what, and what is still open. It ends by saying that
+from tomorrow it will only post what changed.
+
+The name it gives is `BOT_NAME` and the team is `TEAM_NAME`, both in the
+worker's `.env`. `BOT_NAME` is also what `npm run avatar` writes to the
+WhatsApp profile, so the message and the contact card agree.
 
 That happens once. Posting the full history every morning would repeat
 itself daily and be muted by the end of the week.
