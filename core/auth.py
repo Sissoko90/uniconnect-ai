@@ -18,10 +18,24 @@ opening them, because a default that fails safe is the only kind worth having.
 
 import hmac
 import os
+import time
 
 from fastapi import Header, HTTPException
 
 HEADER = "x-uniconnect-token"
+
+# When the worker last proved itself.
+#
+# The API cannot tell whether WhatsApp is still talking to the bot, but it
+# can tell whether the bot is still talking to it: the worker polls for
+# mention alerts every five minutes, so a gap much longer than that means it
+# is gone. Four logouts in eighteen hours were each found by somebody
+# noticing the bot had stopped answering, hours later. /health reports this
+# so an uptime check can find it instead.
+#
+# In memory, and reset by an API restart, which is honest: after a restart
+# we genuinely do not know when the worker last called.
+last_worker_call: float | None = None
 
 NOT_CONFIGURED = (
     "This endpoint is disabled because WORKER_TOKEN is not set on the API. "
@@ -66,3 +80,6 @@ def require_worker(x_uniconnect_token: str = Header(default="")) -> None:
     # patient enough to measure.
     if not hmac.compare_digest(given, expected):
         raise HTTPException(status_code=401, detail="bad or missing worker token")
+
+    global last_worker_call
+    last_worker_call = time.time()

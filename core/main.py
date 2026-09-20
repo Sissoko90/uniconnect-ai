@@ -25,6 +25,7 @@ features land behind them.
 import asyncio
 import os
 import pathlib
+import time
 from contextlib import asynccontextmanager
 
 import alerts
@@ -879,4 +880,14 @@ def health():
         # So a deploy that forgot the token says so instead of quietly
         # refusing every call the worker makes.
         "worker_auth": auth.configured(),
+        # Seconds since the worker last called in. It polls every five
+        # minutes, so anything past about six hundred means the bot is off
+        # WhatsApp and nobody has noticed. Point an uptime check at this:
+        # every outage so far was found by a person wondering why the bot
+        # had gone quiet, hours after it had.
+        "worker_silent_for": (
+            round(time.time() - auth.last_worker_call)
+            if auth.last_worker_call
+            else None
+        ),
     }

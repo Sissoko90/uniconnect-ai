@@ -579,7 +579,44 @@ Restore:
 gunzip -c ~/uniconnect-2026-09-20.sql.gz | docker compose exec -T db psql -U uniconnect -d uniconnect
 ```
 
-### Updating a running deployment
+### Keeping the session alive
+
+WhatsApp allows **one connection per linked device**. A second process on the
+same `auth_info/` throws the first off, and repeating that invalidates the
+pairing: it cost us the paired number four times in eighteen hours, three of
+them because somebody ran `npm run groups` or `npm run avatar` while the
+worker was up.
+
+The tools now refuse rather than warn. Each one claims a lock inside
+`auth_info/` holding its pid, and a second one exits with the command to
+stop the first. A crash leaves a lock whose pid is dead, which the next
+process takes over, so there is nothing to clean up by hand.
+
+Two things a lock cannot do anything about.
+
+**Keep the bot's phone online.** A linked device is unlinked by WhatsApp if
+the primary phone does not connect for about two weeks. That phone is part
+of the deployment, not a spare in a drawer.
+
+**Do not remove the device by hand.** WhatsApp, Settings, Linked devices, on
+the bot's phone. If ours disappears from that list on its own, something is
+removing it, and no amount of code will help.
+
+### Knowing it went down
+
+The worker polls `/alerts` every five minutes, so the API knows when it last
+called in even though it cannot see the WhatsApp connection itself:
+
+```bash
+curl -s localhost:8000/health | grep -o '"worker_silent_for":[^,]*'
+```
+
+Seconds since the last call. Anything past six hundred means the bot is off
+WhatsApp. Point whatever uptime check you already run at that number: every
+outage so far was found by a person wondering why the bot had gone quiet,
+hours after it had.
+
+## Updating a running deployment
 
 ```bash
 cd /opt/uniconnect-ai

@@ -26,6 +26,8 @@ import { existsSync, rmSync } from 'node:fs';
 import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 
+import { claimSession } from './lock.js';
+
 const AUTH_DIR = 'auth_info';
 const PAIR_NUMBER = (process.env.PAIR_NUMBER || '').replace(/\D/g, '');
 
@@ -88,6 +90,8 @@ const quiet = {
 let askedForCode = false;
 
 async function connect() {
+  claimSession('groups.js');
+
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
   const sock = makeWASocket({

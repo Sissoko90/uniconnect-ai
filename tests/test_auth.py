@@ -76,3 +76,28 @@ def test_is_worker_never_raises_and_fails_closed(monkeypatch):
     assert auth.is_worker("wrong") is False
     assert auth.is_worker("") is False
     assert auth.is_worker() is False
+
+
+def test_a_valid_call_records_when_the_worker_last_spoke(monkeypatch):
+    """The API cannot see whether WhatsApp still talks to the bot, but it can
+    see whether the bot still talks to the API. Four logouts in eighteen
+    hours were each found by somebody noticing the bot had gone quiet, hours
+    later. /health reports this so a check can find it first."""
+    monkeypatch.setenv("WORKER_TOKEN", "the-real-secret")
+    monkeypatch.setattr(auth, "last_worker_call", None)
+
+    auth.require_worker("the-real-secret")
+
+    assert auth.last_worker_call is not None
+
+
+def test_a_refused_call_does_not_count(monkeypatch):
+    """Otherwise anybody probing the endpoint from the internet would keep
+    the liveness figure looking healthy while the worker was dead."""
+    monkeypatch.setenv("WORKER_TOKEN", "the-real-secret")
+    monkeypatch.setattr(auth, "last_worker_call", None)
+
+    with pytest.raises(HTTPException):
+        auth.require_worker("wrong")
+
+    assert auth.last_worker_call is None

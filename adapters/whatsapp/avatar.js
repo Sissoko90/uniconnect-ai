@@ -27,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 
+import { claimSession } from './lock.js';
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 // The copy the API serves, so the avatar, the web page and the README are
@@ -35,6 +37,8 @@ const LOGO = resolve(here, '../../core/static/logo.png');
 
 const image = readFileSync(LOGO);
 console.log(`Using ${LOGO} (${Math.round(image.length / 1024)} kB)`);
+
+claimSession('avatar.js');
 
 const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 const sock = makeWASocket({ auth: state });

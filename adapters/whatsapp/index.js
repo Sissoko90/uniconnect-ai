@@ -29,6 +29,8 @@ import qrcode from 'qrcode-terminal';
 
 import * as api from './api.js';
 
+import { claimSession } from './lock.js';
+
 const GROUP_JID = process.env.GROUP_JID || '';
 
 // The group's name in the database, which is not its address on WhatsApp.
@@ -312,6 +314,7 @@ function withSources(result) {
 }
 
 async function connectToWhatsApp() {
+  claimSession('the worker');
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 
   const sock = makeWASocket({ auth: state, logger: quiet });
