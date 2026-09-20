@@ -681,6 +681,7 @@ async function handlePrivate(sock, msg, text, sender) {
 
 /** Send, after a pause, quoting what it answers. */
 async function reply(sock, msg, text) {
+  await underTheCeiling();
   await humanPause();
   await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
 }
@@ -779,6 +780,7 @@ async function askHowItIsGoing(sock) {
       ? person.asked_by
       : `${person.asked_by}@s.whatsapp.net`;
     try {
+      await underTheCeiling();
       await humanPause();
       // In the language they ask their questions in. The API works it out
       // from the five questions they have already asked, which is a far
@@ -809,6 +811,7 @@ async function deliverAlerts(sock) {
   for (const alert of alerts) {
     const jid = alert.to.includes('@') ? alert.to : `${alert.to}@s.whatsapp.net`;
     try {
+      await underTheCeiling();
       await humanPause();
       await sock.sendMessage(jid, {
         text:
@@ -894,6 +897,7 @@ async function maybePostDigest(sock) {
   if (!state.introduced) {
     const whole = await api.overview(GROUP_ID, process.env.DIGEST_LANG || null);
     if (whole.overview) {
+      await underTheCeiling();
       await humanPause();
       await sock.sendMessage(GROUP_JID, {
         text:
@@ -923,6 +927,7 @@ async function maybePostDigest(sock) {
     return;
   }
 
+  await underTheCeiling();
   await humanPause();
   await sock.sendMessage(GROUP_JID, {
     text:

@@ -602,6 +602,39 @@ of the deployment, not a spare in a drawer.
 the bot's phone. If ours disappears from that list on its own, something is
 removing it, and no amount of code will help.
 
+### If WhatsApp restricts the number
+
+It happened on the day the bot joined the 390-member group: a five hour
+restriction. Three causes, and they compound.
+
+**Writing to people who never wrote to the bot.** The worst of the three and
+the one that was a real mistake. The mention alerts and the satisfaction
+survey are direct messages, and both treated "has asked the bot a question"
+as permission, including a question typed with `@ask` in the group. Using
+the bot in public is not permission to be contacted in private, and from
+WhatsApp's side a recent number opening chats with strangers is a spam run.
+Both now require a previous message from that person **in private**.
+
+**Volume.** The bot sends at most six messages a minute across everything it
+does, `MAX_SENDS_PER_MINUTE`, and waits rather than drops when it reaches
+that. Twenty people asking at once still means twenty outgoing messages from
+a young account, which is the shape of the problem even when every message
+is wanted.
+
+**Re-pairing.** Each one registers a new linked device. Four in eighteen
+hours reads like an account being taken over. The lock above removes the
+reason we kept doing it.
+
+While an account is under scrutiny, switch off everything uninvited:
+
+```bash
+echo 'PROACTIVE_DM=false' >> adapters/whatsapp/.env
+sudo systemctl restart uniconnect-bot
+```
+
+That stops the mention alerts and the survey. Answers are unaffected: those
+were asked for.
+
 ### Knowing it went down
 
 The worker polls `/alerts` every five minutes, so the API knows when it last

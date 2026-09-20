@@ -35,6 +35,11 @@ select a.asked_by, count(*) as questions,
 from answers a
 where a.group_id = %(group_id)s
   and a.asked_by is not null
+  -- Asked in private. The survey is a direct message, and a direct message
+  -- to somebody who has only ever used the bot in the group is a stranger
+  -- being contacted out of nowhere: the pattern that got the number
+  -- restricted for five hours the day it joined a group of 390 people.
+  and a.asked_privately
   -- Reused answers are still questions the person asked, so they count. A
   -- copy is excluded only from being reused, not from the person's history.
   and not exists (

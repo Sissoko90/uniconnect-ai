@@ -52,11 +52,21 @@ where m.notified_at is null
   and u.said_at < now() - make_interval(mins => %(grace)s)
   -- Recent enough to still matter.
   and u.said_at > now() - make_interval(hours => %(max_age)s)
-  -- They have used the bot before. This is the opt-in: we only write to
-  -- people who have already started a conversation with us.
+  -- They have written to the bot IN PRIVATE before. That is the opt-in,
+  -- and the word private is the whole of it.
+  --
+  -- This used to accept any question, including an @ask typed in the
+  -- group, so the bot would open a direct chat with somebody who had never
+  -- written to it. That is the pattern WhatsApp punishes as spam, a recent
+  -- number messaging strangers, and the account was restricted for five
+  -- hours the day the bot joined a group of 390 people.
+  --
+  -- Using the bot in public is not permission to be contacted in private.
+  -- It was not a technical mistake, it was the wrong reading of consent.
   and exists (
       select 1 from answers a
       where normalize_handle(a.asked_by) = m.user_norm
+        and a.asked_privately
   )
   -- And they have not spoken since, which would mean they saw it.
   and not exists (
