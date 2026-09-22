@@ -41,6 +41,13 @@ function holder() {
  */
 export function claimSession(what) {
   const pid = holder();
+
+  // Our own lock. groups.js pairs, then reconnects, and the reconnect asks
+  // again: it found its own pid, decided a rival was running, and killed
+  // itself right after a successful pairing. The lock is there to keep two
+  // processes apart, not to stop one from continuing.
+  if (pid === process.pid) return;
+
   if (pid) {
     console.error(
       `Another WhatsApp process is already using this session (pid ${pid}).\n` +
