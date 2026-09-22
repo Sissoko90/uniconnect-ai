@@ -34,6 +34,7 @@ from contextlib import asynccontextmanager
 import alerts
 import answer as answer_engine
 import auth
+import capabilities
 import catchup as catchup_engine
 import documents as documents_engine
 import identity
@@ -295,6 +296,21 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
             answer=intent.HELLO_BACK[intent.greeting_language(question)],
             sources=[],
             meta={"duplicate": False, "greeting": True},
+        )
+
+    # Somebody asking what the bot can do. The one subject the group's
+    # history cannot answer, because nobody has ever posted a message about
+    # it: asked whether it could listen to audio, the bot searched the
+    # messages, found nothing, and said no, having transcribed every voice
+    # note in the group since the day it joined.
+    #
+    # Read off the running system instead, so it only claims what is
+    # actually switched on. Costs nothing, calls nothing.
+    if intent.asks_what_it_can_do(question):
+        return AskResponse(
+            answer=capabilities.describe(answer_engine.detect_lang(question)),
+            sources=[],
+            meta={"duplicate": False, "capabilities": True},
         )
 
     # Somebody asking who they are. Answered from who is asking, never from

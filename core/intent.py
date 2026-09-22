@@ -303,6 +303,46 @@ def asks_their_own_name(question: str) -> bool:
     return bool(OWN_NAME.search(lowered) or WHO_AM_I.search(lowered))
 
 
+# Somebody asking what the bot can do, which the group's history cannot
+# answer because nobody has ever posted a message about it.
+#
+# Asked "can you view images and listen to audio messages?", the bot
+# searched the history, found nothing about audio, and said it works only
+# from text. It has transcribed every voice note in this group since the day
+# it joined.
+ABOUT_ITSELF = re.compile(
+    r"what can you do|what are you (?:able|capable)|what can't you do"
+    r"|what do you do|how do you work|your (?:features|capabilities)"
+    r"|que (?:peux|sais)-tu faire|qu'est-ce que tu (?:peux|sais) faire"
+    r"|tu (?:peux|sais) faire quoi|tes (?:fonctionnalités|fonctionnalites|capacités|capacites)"
+    r"|comment tu fonctionnes|comment fonctionnes-tu"
+)
+
+# Or asking about one particular thing it might do. A medium is required,
+# because "can you tell me the deadline" is an ordinary question and this
+# must not swallow it.
+A_MEDIUM = (
+    "image", "images", "photo", "photos", "picture", "pictures",
+    "audio", "voice note", "voice notes", "vocal", "vocaux", "vocale",
+    "note vocale", "notes vocales", "video", "vidéo", "sticker",
+)
+
+CAN_YOU = (
+    "can you", "are you able", "do you read", "do you see", "do you listen",
+    "do you understand", "peux-tu", "tu peux", "sais-tu", "tu sais",
+    "es-tu capable", "arrives-tu", "tu arrives", "tu lis", "tu vois",
+    "tu écoutes", "tu ecoutes", "tu comprends",
+)
+
+
+def asks_what_it_can_do(question: str) -> bool:
+    """A question about the bot, which the group's messages cannot answer."""
+    lowered = flatten(question)
+    if ABOUT_ITSELF.search(lowered):
+        return True
+    return any(w in lowered for w in A_MEDIUM) and any(c in lowered for c in CAN_YOU)
+
+
 def wants_the_timeline(question: str) -> bool:
     """A request for the group's dates rather than a question about one.
 
