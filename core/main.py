@@ -681,9 +681,22 @@ def poll_vote(req: PollVote) -> dict:
 
 
 @app.get("/poll/{group_id}", dependencies=[Depends(auth.require_worker)])
-def poll_results(group_id: str, limit: int = 14) -> dict:
-    """Each evening's tally, most recent first."""
-    return poll.results(pool, group_id, limit)
+def poll_results(
+    group_id: str, limit: int = 14, day: str | None = None, detail: bool = False
+) -> dict:
+    """Each evening's tally, most recent first.
+
+    `detail` adds every individual vote with the name behind it. A WhatsApp
+    poll already shows the group who tapped what, so this hides nothing that
+    is not already visible, and it answers the question worth asking the
+    morning after: which of the people who tested it said no.
+    """
+    out = poll.results(pool, group_id, limit)
+    if detail:
+        # Under its own key. "votes" is already the total and overwriting it
+        # with a list would break every caller that prints the number.
+        out["voters"] = poll.votes(pool, group_id, day)
+    return out
 
 
 # --------------------------------------------------------------------------

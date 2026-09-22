@@ -76,6 +76,43 @@ def withdraw(pool, poll_id: str, voter: str) -> None:
         )
 
 
+VOTES_SQL = """
+select v.poll_day, v.voter, v.choice, v.voted_at,
+       -- The name the group knows them by, when we have it. A column of
+       -- phone numbers is unreadable, and this is the one page where
+       -- knowing who said what is the point.
+       coalesce(p.display_name, v.voter) as voter_name
+from poll_votes v
+left join people p
+  on p.group_id = v.group_id and p.handle_norm = normalize_handle(v.voter)
+where v.group_id = %(group_id)s
+  and (%(day)s::date is null or v.poll_day = %(day)s::date)
+order by v.poll_day desc, v.voted_at desc
+limit %(limit)s
+"""
+
+
+def votes(pool, group_id: str, day: str | None = None, limit: int = 500) -> list[dict]:
+    """Every vote, one row each, most recent first.
+
+    Named voters and not just a count, because a WhatsApp poll already shows
+    the group who tapped what. Hiding it here would protect nothing and would
+    leave us unable to answer the one question worth asking the morning
+    after: which of the people who tested it said no.
+    """
+    with pool.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                VOTES_SQL, {"group_id": group_id, "day": day, "limit": limit}
+            )
+            rows = cur.fetchall()
+
+    for row in rows:
+        row["poll_day"] = row["poll_day"].isoformat()
+        row["voted_at"] = row["voted_at"].isoformat().replace("+00:00", "Z")
+    return rows
+
+
 def results(pool, group_id: str, limit: int = 14) -> dict:
     """Each evening's tally, most recent first.
 

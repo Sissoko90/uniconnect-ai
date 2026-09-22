@@ -23,9 +23,18 @@ Translate it completely and faithfully. Keep every date, every number, every \
 name, every email address and every link exactly as they are: a translated \
 link is a broken link, and a date that moves is worse than no translation.
 
-Keep the structure: the same headings, the same lists, the same order. Do \
-not summarise, do not explain, do not add a note of your own. If a line is \
-already in the target language, leave it as it is.
+Keep the structure exactly, line for line. The same headings on their own \
+lines, the same bullet markers at the start of the same items, the same \
+blank lines between blocks, the same order. A line that stands alone in the \
+original stands alone in the translation.
+
+This matters beyond tidiness: the PDF is laid out from that structure, in \
+the original document's own design, so a heading that arrives as part of a \
+paragraph loses its heading and a line that gets merged into the one above \
+loses the panel built around it.
+
+Do not summarise, do not explain, do not add a note of your own. If a line \
+is already in the target language, leave it as it is.
 
 Output the translated document and nothing else."""
 

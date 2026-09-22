@@ -138,11 +138,21 @@ visibility is the point. The group should be able to see what it thinks
 before it is asked to vote, and we should have to live with the answer in
 public.
 
+One answer each, not both: the poll is sent as a single choice poll, which
+is what phones render as the familiar card with round buttons.
+
 The votes are also recorded, by evening, so the trend can be read back:
 
 ```
-GET /poll/<group_id>
+GET /poll/<group_id>                 each evening's yes, no and share
+GET /poll/<group_id>?detail=true     every vote, with the name behind it
+GET /poll/<group_id>?detail=true&day=2026-09-22
 ```
+
+The detail listing names the voters. It hides nothing that is not already
+visible, because a WhatsApp poll shows the group who tapped what, and it
+answers the question worth asking the morning after: which of the people
+who tested it said no.
 
 Votes are end to end encrypted like everything else. The bot can read them
 only because it created the poll and kept the key; if that key is ever lost,
@@ -252,6 +262,13 @@ person waits for nothing.
 The translation keeps every date, number, name, email and link exactly as
 they are, and says on the last line that it was machine translated from the
 original shared in the group.
+
+**The design is the original's, not ours.** The PDF carries the same navy
+banner, white title, gold programme line, navy serif headings and gold
+panel around the prize, on the same US Letter page, measured out of the
+document the group was given. Somebody who reads French gets that document
+with its words translated and nothing else changed, rather than a plainer
+one that happens to be readable.
 
 Asking what a document *says* is a different thing and stays a question:
 "what do the guidelines say about teams" is answered from the text, with a

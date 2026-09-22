@@ -93,3 +93,6 @@ Thumbs.db
 # Not code, and not something to keep in the history.
 adapters/whatsapp/announcement.txt
 adapters/whatsapp/.announced
+
+# Editor and tool settings, local to one machine and one session.
+.claude/
