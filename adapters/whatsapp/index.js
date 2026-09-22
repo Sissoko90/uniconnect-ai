@@ -1051,25 +1051,43 @@ function digestState() {
     // The file used to hold a bare date. Read that as "already introduced":
     // a group the bot has been posting to for days does not need an
     // introduction, and sending one would look like a malfunction.
-    const state = raw.startsWith('{') ? JSON.parse(raw) : { day: raw, introduced: true };
+    const state = raw.startsWith('{') ? JSON.parse(raw) : { day: raw, met: [] };
 
-    // Which group it is about. Without this the state was global, and
-    // moving the bot from the test group to the real one carried both
-    // facts across: the morning of the launch it had already introduced
-    // itself to seven people, so it believed the day was done and said
-    // nothing to the three hundred and ninety it had just joined.
+    // Every group already introduced to, not just the last one.
     //
-    // A different group has never been introduced to and its day is not
-    // done, whatever was written here for the last one.
-    if (state.group !== GROUP_JID) return { group: GROUP_JID, day: null, introduced: false };
-    return state;
+    // This held a single group, and that was wrong twice over. Held
+    // globally, moving from the test group to the real one carried the
+    // introduction across and the 390 new members were never greeted.
+    // Held as one group, a rehearsal in the test group and back made the
+    // real group look new again, and the whole forty-line introduction
+    // went out to it a third time.
+    //
+    // A set has neither failure. The day still belongs to the group it was
+    // counted for, because a digest is about one group's last 24 hours.
+    const met = Array.isArray(state.met)
+      ? state.met
+      : state.introduced
+        ? [state.group].filter(Boolean)
+        : [];
+
+    return {
+      met,
+      introduced: met.includes(GROUP_JID),
+      day: state.group === GROUP_JID || !state.group ? state.day : null,
+    };
   } catch {
-    return { group: GROUP_JID, day: null, introduced: false }; // never posted
+    return { met: [], introduced: false, day: null }; // never posted
   }
 }
 
 function saveDigestState(state) {
   writeFileSync(DIGEST_STATE, JSON.stringify(state));
+}
+
+/** Mark this group done for today, and remembered as introduced. */
+function markDone(state, today) {
+  const met = state.met.includes(GROUP_JID) ? state.met : [...state.met, GROUP_JID];
+  saveDigestState({ group: GROUP_JID, day: today, met });
 }
 
 /** Five lines, once a day, in the group. Checked every ten minutes. */
@@ -1100,7 +1118,7 @@ async function maybePostDigest(sock) {
           'changed, and nothing else. Demain matin je posterai cinq lignes ' +
           'sur ce qui a changé, et rien de plus.',
       });
-      saveDigestState({ group: GROUP_JID, day: today, introduced: true });
+      markDone(state, today);
       console.log('introduction posted');
       return;
     }
@@ -1116,7 +1134,7 @@ async function maybePostDigest(sock) {
   // A quiet day is a result, not an error. Announcing silence is noise, and
   // the day counts as done: there is nothing to retry.
   if (result.quiet || !result.digest) {
-    saveDigestState({ group: GROUP_JID, day: today, introduced: true });
+    markDone(state, today);
     console.log('quiet day, no digest posted');
     return;
   }
@@ -1137,7 +1155,7 @@ async function maybePostDigest(sock) {
   // no digest was ever posted. Anything thrown above leaves the day unmarked,
   // so the next check ten minutes later tries again, for as long as the
   // digest hour lasts.
-  saveDigestState({ group: GROUP_JID, day: today, introduced: true });
+  markDone(state, today);
   console.log('digest posted');
 }
 
