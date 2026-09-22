@@ -150,3 +150,27 @@ def test_directional_isolates_around_a_mention_are_stripped(tmp_path):
     # The first is a question put to the bot and is dropped, which only works
     # once the isolates are gone.
     assert [m["content"] for m in messages] == ["the deadline is Thursday"]
+
+
+def test_french_system_notices_are_not_group_content(tmp_path):
+    """WhatsApp writes its own notices in the language of the phone that
+    exported the chat, and only the English wording was listed. A French
+    export filed seven of them as things the group had said, attributed to
+    the group's own name, including one that recites the encryption notice
+    and one that lists the phone numbers of people somebody added."""
+    export = (
+        "[04/09/2026, 08:27:00] UniPods METI: Les messages et les appels sont "
+        "chiffrés de bout en bout.\n"
+        "[04/09/2026, 10:45:00] UniPods METI: Vous avez utilisé un lien pour "
+        "rejoindre le groupe\n"
+        "[05/09/2026, 09:00:00] UniPods METI: ~ Diane a ajouté +250 796 592 274\n"
+        # A non-breaking space inside the number, which is how WhatsApp
+        # writes it and which a literal space never matches.
+        "[05/09/2026, 09:01:00] UniPods METI: Comme ce groupe inclut plus de "
+        "256 membres, seulement les admins peuvent modifier\n"
+        "[05/09/2026, 10:00:00] Steven: the deadline is Thursday\n"
+    )
+
+    messages = parse(tmp_path, export)
+
+    assert [m["content"] for m in messages] == ["the deadline is Thursday"]

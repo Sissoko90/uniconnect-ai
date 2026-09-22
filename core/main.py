@@ -329,6 +329,19 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                 brief = catchup_engine.catch_up(
                     pool, user=req.user, group_id=req.group_id, question=question
                 )
+                if brief.get("nothing_new"):
+                    # Their bookmark is up to date, so there is nothing they
+                    # have not read. Somebody who typed "Recap" asked for a
+                    # summary, and "nothing new since your last visit" is
+                    # true and useless: they get the group's day instead.
+                    digest = recap.daily_digest(
+                        pool, req.group_id, lang=answer_engine.detect_lang(question)
+                    )
+                    brief = {
+                        "summary": digest.get("digest"),
+                        "since": digest.get("since"),
+                        "message_count": digest.get("message_count"),
+                    }
                 text, covering, count = (
                     brief.get("summary"), brief.get("since"), brief.get("message_count")
                 )

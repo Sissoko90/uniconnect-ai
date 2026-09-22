@@ -39,7 +39,20 @@ NOISE = re.compile(
     r"(end-to-end encrypted|a été ajouté|added|left$|joined using|"
     r"changed the subject|a changé|created group|a créé|"
     r"<Media omitted>|<Médias omis>|image omitted|sticker omitted|"
-    r"This message was deleted|Ce message a été supprimé)",
+    r"This message was deleted|Ce message a été supprimé|"
+    # The same notices in French. WhatsApp writes them in the language of
+    # the phone that exported the chat, and only the English wording was
+    # listed, so a French export filed seven of them as things the group
+    # had said, attributed to the group's own name. One of them recites
+    # the encryption notice; another lists the phone numbers of people
+    # somebody added.
+    r"chiffrés de bout en bout|a rejoint le groupe|"
+    r"utilisé un lien pour rejoindre|a ajouté|a retiré|est parti|"
+    # \s, not a space: WhatsApp writes "256\u00a0membres" with a
+    # non-breaking space, which a literal space never matches.
+    r"inclut plus de \d+\s*membres|a modifié|a supprimé ce message|"
+    r"image absente|vidéo absente|audio absent|document absent|"
+    r"sticker absent|GIF absent|autocollant absent)",
     re.IGNORECASE,
 )
 

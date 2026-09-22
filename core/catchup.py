@@ -118,14 +118,14 @@ def catch_up(pool, user: str, group_id: str, question: str | None = None) -> dic
     rows.reverse()
 
     if not rows:
-        lang = answer_engine.detect_lang(question or "")
-        nothing = {
-            "fr": "Rien de nouveau depuis votre dernier passage.",
-            "en": "Nothing new since you were last here.",
-        }
+        # Nothing unread. Reported rather than answered: somebody who typed
+        # "Recap" asked for a summary and being told there is nothing is a
+        # true statement and a useless reply. The caller sends them the
+        # day's digest instead, which is what they wanted.
         _touch(pool, user)
         return {
-            "summary": nothing[lang],
+            "summary": None,
+            "nothing_new": True,
             "since": since.isoformat().replace("+00:00", "Z"),
             "message_count": 0,
             "truncated": False,
