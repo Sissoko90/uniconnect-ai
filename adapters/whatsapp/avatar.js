@@ -40,7 +40,11 @@ console.log(`Using ${LOGO} (${Math.round(image.length / 1024)} kB)`);
 
 claimSession('avatar.js');
 
-const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+// Which session to dress. The spare number has its own, so it can carry the
+// same name and picture as the main one and nobody notices the switch.
+const AUTH_DIR = process.env.AUTH_DIR || 'auth_info';
+
+const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 const sock = makeWASocket({ auth: state });
 sock.ev.on('creds.update', saveCreds);
 
