@@ -206,6 +206,48 @@ const quiet = {
 };
 const humanPause = () => sleep(MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS));
 
+// A ceiling on everything the bot sends, answers included.
+//
+// WhatsApp restricted this number for five hours the day it joined a group
+// of 390 people. A pause between messages is not enough on its own: fifteen
+// people asking at once still produces fifteen outgoing messages in a
+// minute from an account four days old, which is what a spam run looks like
+// from outside.
+//
+// Ten a minute. Six was the first value, set the hour of the restriction,
+// and it is too tight to demonstrate anything: the fifteenth person would
+// wait two and a half minutes, which reads as a broken bot in front of the
+// people who vote. What this counts is almost entirely replies to somebody
+// who has just written, the safest kind of message there is; writing to
+// people who had not written is what caused the restriction, and that is
+// fixed elsewhere. Raise it for a busy hour if you must, never remove it.
+const MAX_SENDS_PER_MINUTE = Number(process.env.MAX_SENDS_PER_MINUTE || 10);
+const sendTimes = [];
+
+// Whether the bot may write to anybody who has not just written to it.
+//
+// Covers the mention alerts and the satisfaction survey, the only two
+// things it says uninvited in private. Both are good features and both are
+// indistinguishable, from WhatsApp's side, from a new number messaging
+// strangers. Worth switching off while an account is under scrutiny, and
+// worth being a switch rather than an edit at midnight.
+const PROACTIVE_DM = process.env.PROACTIVE_DM !== 'false';
+
+/** Wait until sending one more message stays under the per-minute ceiling. */
+async function underTheCeiling() {
+  for (;;) {
+    const cutoff = Date.now() - 60_000;
+    while (sendTimes.length && sendTimes[0] < cutoff) sendTimes.shift();
+    if (sendTimes.length < MAX_SENDS_PER_MINUTE) {
+      sendTimes.push(Date.now());
+      return;
+    }
+    const waitFor = sendTimes[0] + 60_000 - Date.now();
+    console.log(`holding a message for ${Math.ceil(waitFor / 1000)}s: send ceiling reached`);
+    await sleep(Math.max(waitFor, 1000));
+  }
+}
+
 // Invisible characters WhatsApp puts inside message text: bidirectional
 // isolates and embeddings, zero width spaces, the byte order mark.
 //
@@ -313,6 +355,34 @@ function withSources(result) {
   return text;
 }
 
+/**
+ * Logged out: stop, loudly, and never try again on its own.
+ *
+ * The process used to exit here, and systemd restarts it ten seconds later.
+ * Each restart is another login attempt on a session WhatsApp has already
+ * rejected, so one logout became dozens of attempts an hour. That is what a
+ * compromised account looks like from Meta's side, and the number was
+ * restricted for five hours the day it happened.
+ *
+ * So the process stays alive and does nothing: systemd sees a running
+ * service and restarts nothing, and the journal repeats the one line that
+ * matters until a person re-pairs. Doing nothing is the right behaviour
+ * here, and it has to be a deliberate state rather than a crash.
+ */
+function stayDownUntilSomebodyRepairs() {
+  const say = () =>
+    console.error(
+      'LOGGED OUT of WhatsApp. Not retrying: every retry is another login ' +
+        'attempt on a rejected session, which is how a number gets blocked. ' +
+        'Re-pair by hand: stop the service, remove auth_info, run npm run groups.'
+    );
+
+  say();
+  // Every ten minutes: visible to whoever reads the journal tomorrow,
+  // without filling the disk tonight.
+  setInterval(say, 10 * 60_000);
+}
+
 async function connectToWhatsApp() {
   claimSession('the worker');
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
@@ -333,7 +403,7 @@ async function connectToWhatsApp() {
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log('Connection closed. Reconnecting:', shouldReconnect);
       if (shouldReconnect) connectToWhatsApp();
-      else console.error('Logged out. Delete auth_info/ and scan the QR again.');
+      else stayDownUntilSomebodyRepairs();
     } else if (connection === 'open') {
       console.log('WhatsApp bot is online.');
       checkGroupJid(sock).catch((e) => console.error('group check failed:', e.message));
@@ -772,6 +842,7 @@ const SURVEY = {
  * had and which suppressed a whole morning's digest.
  */
 async function askHowItIsGoing(sock) {
+  if (!PROACTIVE_DM) return;
   const { due } = await api.surveyDue(GROUP_ID);
   if (!due.length) return;
 
@@ -804,6 +875,7 @@ async function askHowItIsGoing(sock) {
  * the same mention twice. Nothing is posted in the group.
  */
 async function deliverAlerts(sock) {
+  if (!PROACTIVE_DM) return;
   const { alerts } = await api.pendingAlerts(GROUP_ID);
   if (!alerts.length) return;
 
