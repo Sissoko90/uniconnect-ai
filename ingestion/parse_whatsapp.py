@@ -74,9 +74,35 @@ INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
 # contains both sides of every exchange.
 ADDRESSED_TO_BOT = re.compile(r"^\s*@ask\b", re.IGNORECASE)
 
-# The bot's display name in the export, as WhatsApp writes it. Configurable
-# because the name follows whichever number the team paired.
-BOT_AUTHOR = os.environ.get("BOT_AUTHOR", "Uniconnect-IA")
+# Any bot's messages, ours included, by the name the export shows.
+#
+# This was one configurable name, and one name is never enough: a fresh
+# export re-imported a rival bot's whole testing day the hour after it had
+# been deleted from the database, and the bot started citing it again.
+#
+# The suffix rule is the organiser's own: every team was told to name its
+# bot "<TEAM NAME> BOT". Waiting to learn each new bot's exact spelling
+# means filtering it out the day after it has been cited.
+#
+# Kept in step with core/ingest.py, which applies the same rule to live
+# messages. Extend either with BOT_AUTHOR, comma separated.
+BOT_NAMES = {
+    name.strip().casefold()
+    for name in (
+        "meti_bot,Nexus Bot,PodPal,Uniconnect-IA,UniConnect-BOT,"
+        + os.environ.get("BOT_AUTHOR", "")
+    ).split(",")
+    if name.strip()
+}
+
+
+def written_by_a_bot(author: str) -> bool:
+    name = (author or "").strip().casefold()
+    if name in BOT_NAMES:
+        return True
+    # "Talbot" and "Robert" are people; the boundary is what makes the
+    # difference.
+    return name.endswith(" bot") or name.endswith("-bot") or name.endswith("_bot")
 
 FRENCH_MARKERS = {
     "je", "tu", "nous", "vous", "est", "les", "des", "une", "pour", "avec",
@@ -197,7 +223,7 @@ def parse(path: str, tz_name: str) -> list[dict]:
         if m["content"].strip()
         and not NOISE.search(m["content"])
         and not ADDRESSED_TO_BOT.match(m["content"])
-        and m["author"].casefold() != BOT_AUTHOR.casefold()
+        and not written_by_a_bot(m["author"])
     ]
 
 

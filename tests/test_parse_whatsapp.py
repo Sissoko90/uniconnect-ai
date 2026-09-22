@@ -174,3 +174,23 @@ def test_french_system_notices_are_not_group_content(tmp_path):
     messages = parse(tmp_path, export)
 
     assert [m["content"] for m in messages] == ["the deadline is Thursday"]
+
+
+def test_any_bot_in_the_export_is_dropped(tmp_path):
+    """A fresh export re-imported a rival bot's whole testing day an hour
+    after it had been deleted from the database, and the bot went back to
+    citing it. The parser knew one configurable name, and one name is never
+    enough. The suffix rule is the organiser's own: every team was told to
+    name its bot "<TEAM NAME> BOT"."""
+    export = (
+        "[20/09/2026, 10:56:15] Nexus Bot: Sure! Here are the recordings.\n"
+        "[20/09/2026, 11:00:00] meti_bot: Good morning, I have no team today.\n"
+        "[20/09/2026, 11:01:00] Swift Agents BOT: Hello everyone.\n"
+        "[20/09/2026, 11:02:00] UniConnect-BOT: According to Steven: hello\n"
+        "[20/09/2026, 11:03:00] Talbot Mensah: the deadline is Thursday\n"
+    )
+
+    messages = parse(tmp_path, export)
+
+    # Talbot is a person. The boundary is what makes the difference.
+    assert [m["author"] for m in messages] == ["Talbot Mensah"]
