@@ -128,6 +128,15 @@ const ANNOUNCE_NOW = process.env.ANNOUNCE_NOW === 'true';
 const ANNOUNCE_FILE = process.env.ANNOUNCE_FILE || 'announcement.txt';
 const ANNOUNCE_STATE = new URL('.announced', import.meta.url).pathname;
 
+/** Which group the announcement has already gone to, if any. */
+function announcedTo() {
+  try {
+    return readFileSync(ANNOUNCE_STATE, 'utf8').trim();
+  } catch {
+    return null;
+  }
+}
+
 // Who the bot says it is. The same name avatar.js writes to the WhatsApp
 // profile, so the message and the contact card agree.
 const BOT_NAME = process.env.BOT_NAME || 'UniConnect-BOT';
@@ -887,7 +896,12 @@ async function checkGroupJid(sock) {
  */
 async function maybeAnnounce(sock) {
   if (!ANNOUNCE_NOW || !GROUP_JID) return;
-  if (existsSync(ANNOUNCE_STATE)) return;
+
+  // The marker records which group it was sent to. Rehearsing in the test
+  // group would otherwise mark the job done, and the real announcement
+  // would never go out: no error, no explanation, exactly the way the
+  // group introduction was suppressed on launch day.
+  if (announcedTo() === GROUP_JID) return;
 
   let text;
   try {
@@ -904,7 +918,7 @@ async function maybeAnnounce(sock) {
   await underTheCeiling();
   await humanPause();
   await sock.sendMessage(GROUP_JID, { text });
-  writeFileSync(ANNOUNCE_STATE, new Date().toISOString());
+  writeFileSync(ANNOUNCE_STATE, GROUP_JID);
   console.log('announcement posted');
 }
 
