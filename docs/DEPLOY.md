@@ -704,6 +704,31 @@ WhatsApp. Point whatever uptime check you already run at that number: every
 outage so far was found by a person wondering why the bot had gone quiet,
 hours after it had.
 
+## Loading a second export of the same group
+
+Two exports taken from two phones do not de-duplicate against each other.
+The unique index compares author and timestamp, and an iOS export writes
+seconds and real names where an Android one writes neither: `Stanley Ojika`
+at 10:51:00 and `+234 909 369 6284` at 10:51 are two rows to the index and
+one message to everybody else.
+
+So the parser will report `2279 new, 0 already there` and mean it. Run the
+de-duplication afterwards:
+
+```bash
+docker compose exec -T db psql -U uniconnect -d uniconnect \
+    < db/migrations/008_dedup_across_exports.sql
+```
+
+It keeps the copy with a real name, which is the one worth citing, and
+matches on identical text within five minutes rather than on the timestamp,
+because the two phones disagree by seconds and a message repeated days
+apart is a different message.
+
+**Prefer an export from a phone that has the group's members as contacts.**
+It is the cheapest way to get names into citations: an export full of real
+names does in one command what filling in `people.py` does by hand.
+
 ## Updating a running deployment
 
 ```bash
