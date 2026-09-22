@@ -94,5 +94,11 @@ Thumbs.db
 adapters/whatsapp/announcement.txt
 adapters/whatsapp/.announced
 
+# What the worker has already done: the day the digest went out, the group
+# it has introduced itself to, tonight's poll and its key, and how many
+# reactions it has spent today. One machine's state, not the project's.
+adapters/whatsapp/.digest-state
+adapters/whatsapp/.react-state
+
 # Editor and tool settings, local to one machine and one session.
 .claude/

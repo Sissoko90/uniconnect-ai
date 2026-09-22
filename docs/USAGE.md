@@ -122,6 +122,30 @@ Further east the group wakes up to it a little later.
 
 Change it with `DIGEST_HOUR_UTC`, and its length with `MORNING_DIGEST_LINES`.
 
+### Reactions, without being asked
+
+The bot marks a few messages a day with a reaction:
+
+| | |
+|---|---|
+| 📌 | a link somebody will want again: a recording, a document, a form |
+| ⏰ | a date somebody has to act on |
+| 😄 | a joke the sender has already flagged as one |
+
+A reaction is not a message. It does not appear in the thread, it does not
+notify anybody, and it cannot be the bot replying to every message, which is
+the complaint this group has already made out loud. It is the quietest thing
+the bot can do, and it is useful rather than decorative: afterwards, the
+things worth keeping can be found by scrolling for the bot's own mark.
+
+Eight a day at most, of which three jokes, and never twice inside twenty
+minutes. It never marks another team's bot, and it never puts a grin on a
+message that mentions bots, spam or flooding, however many laughing faces
+that message carries.
+
+`REACT_TO_GROUP=false` turns it off. The ceilings are `REACT_MAX_PER_DAY`,
+`REACT_MAX_FUN_PER_DAY` and `REACT_QUIET_MINUTES`.
+
 ### The evening poll
 
 At **23:00 in Bamako**, at the end of the day it is asking about, the bot

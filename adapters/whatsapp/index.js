@@ -35,6 +35,7 @@ import qrcode from 'qrcode-terminal';
 import * as api from './api.js';
 
 import { claimSession } from './lock.js';
+import { worthMarking, writtenByABot } from './marks.js';
 
 // The WhatsApp session in use, and the one to fall back to.
 //
@@ -700,6 +701,11 @@ async function handle(sock, msg) {
     // become the source for the next person's.
     if (!text.toLowerCase().startsWith('@ask')) {
       await ingestText(msg, text, sender, when);
+      // And, once in a while, mark it. Only what the group loses by
+      // scrolling: a link somebody will want again, a date somebody has to
+      // act on. Never a message addressed to the bot, which gets its own
+      // 👀 further down and would otherwise collect two.
+      await maybeMark(sock, msg, text);
     }
     await handleGroup(sock, msg, text, sender);
   } else {
@@ -947,6 +953,95 @@ async function react(sock, msg, emoji) {
   } catch (error) {
     console.error('reaction failed:', error.message);
   }
+}
+
+// Reacting to a message nobody asked the bot to read.
+//
+// The quietest thing it can do. A reaction is not a message: it does not
+// appear in the thread, it does not notify the group, and it cannot be the
+// bot "replying to every message", which is the complaint this group has
+// already made out loud. It is the "reads everything, writes almost
+// nothing" rule taken one step further.
+//
+// It is also useful rather than decorative. What it marks is what the group
+// loses by scrolling: a link somebody will want again, a date somebody has
+// to act on. Afterwards those messages can be found by looking for the
+// bot's own mark on them.
+const REACTS_UNASKED = process.env.REACT_TO_GROUP !== 'false';
+
+// Deliberately small. At eight a day in a group of 390 people the bot is
+// noticed once or twice by anybody scrolling, which is the intended volume.
+const REACT_MAX_PER_DAY = Number(process.env.REACT_MAX_PER_DAY || 8);
+
+// And never twice in quick succession, whatever arrives. A burst of
+// reactions during a busy hour is the thing that would read as a bot
+// crawling the group.
+const REACT_QUIET_MINUTES = Number(process.env.REACT_QUIET_MINUTES || 20);
+
+// Jokes get their own, smaller allowance inside the day.
+//
+// A link and a deadline are worth something to somebody who missed them; a
+// grin is worth something only in the moment. Without a separate count a
+// funny afternoon would spend the whole day's budget before the evening's
+// announcement arrived.
+const REACT_MAX_FUN_PER_DAY = Number(process.env.REACT_MAX_FUN_PER_DAY || 3);
+
+const REACT_STATE = new URL('.react-state', import.meta.url).pathname;
+
+function reactState() {
+  try {
+    const state = JSON.parse(readFileSync(REACT_STATE, 'utf8'));
+    return {
+      day: state.day || '',
+      count: state.count || 0,
+      fun: state.fun || 0,
+      last: state.last || 0,
+    };
+  } catch {
+    return { day: '', count: 0, fun: 0, last: 0 };
+  }
+}
+
+/** Mark a message the group will want to find again.
+ *
+ * The count is kept on disk rather than in memory on purpose. systemd
+ * restarts this worker on any failure, and a counter that resets with it is
+ * not a daily ceiling at all: a bad afternoon of restarts would spend the
+ * day's allowance several times over, in a group that has asked for fewer
+ * bot interruptions.
+ */
+async function maybeMark(sock, msg, text) {
+  if (!REACTS_UNASKED || writtenByABot(msg.pushName)) return;
+
+  const emoji = worthMarking(text);
+  if (!emoji) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const state = reactState();
+  const fresh = state.day === today ? state : { count: 0, fun: 0, last: state.last };
+  const funny = emoji === '😄';
+
+  if (fresh.count >= REACT_MAX_PER_DAY) return;
+  if (funny && fresh.fun >= REACT_MAX_FUN_PER_DAY) return;
+  // One quiet period across all of them. Two reactions inside a minute is
+  // what would read as a bot crawling the group, whatever they were for.
+  if (Date.now() - fresh.last < REACT_QUIET_MINUTES * 60_000) return;
+
+  // Under the same ceiling as everything else the bot sends. A reaction is
+  // a send, and the ceiling exists to keep the account off WhatsApp's own
+  // idea of what a spammer looks like.
+  await underTheCeiling();
+  await react(sock, msg, emoji);
+  writeFileSync(
+    REACT_STATE,
+    JSON.stringify({
+      day: today,
+      count: fresh.count + 1,
+      fun: fresh.fun + (funny ? 1 : 0),
+      last: Date.now(),
+    })
+  );
+  console.log(`marked a message ${emoji} (${fresh.count + 1}/${REACT_MAX_PER_DAY} today)`);
 }
 
 /** Thanks, answered with a reaction instead of a message.
