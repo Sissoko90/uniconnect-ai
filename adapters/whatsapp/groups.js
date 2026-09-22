@@ -28,7 +28,10 @@ import qrcode from 'qrcode-terminal';
 
 import { claimSession } from './lock.js';
 
-const AUTH_DIR = 'auth_info';
+// Which session directory to pair into. The backup number is paired with
+// AUTH_DIR=auth_info_backup, ahead of time, so that the day it is needed
+// nobody has to find a phone and type a code.
+const AUTH_DIR = process.env.AUTH_DIR || 'auth_info';
 const PAIR_NUMBER = (process.env.PAIR_NUMBER || '').replace(/\D/g, '');
 
 // The number this file used to print as an example. Somebody ran it verbatim,

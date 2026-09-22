@@ -18,7 +18,8 @@
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
-const LOCK = new URL('auth_info/.lock', import.meta.url).pathname;
+const AUTH_DIR = process.env.AUTH_DIR || 'auth_info';
+const LOCK = new URL(`${AUTH_DIR}/.lock`, import.meta.url).pathname;
 
 function holder() {
   try {
@@ -50,7 +51,7 @@ export function claimSession(what) {
     process.exit(1);
   }
 
-  mkdirSync(new URL('auth_info', import.meta.url).pathname, { recursive: true });
+  mkdirSync(new URL(AUTH_DIR, import.meta.url).pathname, { recursive: true });
   writeFileSync(LOCK, String(process.pid));
 
   const release = () => {

@@ -635,6 +635,36 @@ sudo systemctl restart uniconnect-bot
 That stops the mention alerts and the survey. Answers are unaffected: those
 were asked for.
 
+### A spare number, ready before you need it
+
+Pairing needs a person typing eight characters on a phone, so it cannot
+happen by itself at the moment the first number is rejected. The only way a
+switch is automatic is if the second session already exists.
+
+Prepare it once, calmly, with the worker stopped:
+
+```bash
+sudo systemctl stop uniconnect-bot
+cd /opt/uniconnect-ai/adapters/whatsapp
+sudo -u uniconnect AUTH_DIR=auth_info_backup PAIR_NUMBER=<the spare number> npm run groups
+sudo systemctl start uniconnect-bot
+```
+
+Then **add the spare number to the group** and tell the organiser it is a
+standby for the same bot. A number that appears in the group during an
+incident, unannounced, is a second problem on top of the first.
+
+From then on the worker uses the main session and falls back on its own:
+
+```
+LOGGED OUT of the main number. Switching to the spare session in auth_info_backup.
+```
+
+Only on an outright logout. A dropped connection reconnects by itself and a
+rate limit passes; switching numbers over either is how you lose both. There
+is no third session, so when this fires, re-pair the first number the same
+day.
+
 ### Knowing it went down
 
 The worker polls `/alerts` every five minutes, so the API knows when it last

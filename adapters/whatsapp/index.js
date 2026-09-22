@@ -18,7 +18,7 @@
  * so the decision lives here, in one file.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import makeWASocket, {
   DisconnectReason,
@@ -30,6 +30,21 @@ import qrcode from 'qrcode-terminal';
 import * as api from './api.js';
 
 import { claimSession } from './lock.js';
+
+// The WhatsApp session in use, and the one to fall back to.
+//
+// A spare number, paired in advance and already in the group, sitting idle
+// in auth_info_backup. Pairing needs a human typing eight characters on a
+// phone and cannot be automated, so the only way a switch can be automatic
+// is if the second session already exists before it is needed.
+//
+// It is used for one thing: WhatsApp rejecting the first session outright.
+// Not for a dropped connection, which reconnects on its own, and not for a
+// rate limit, which passes. Switching numbers over a passing problem is how
+// you lose both.
+const AUTH_DIR = process.env.AUTH_DIR || 'auth_info';
+const AUTH_DIR_BACKUP = process.env.AUTH_DIR_BACKUP || 'auth_info_backup';
+let usingBackup = AUTH_DIR === AUTH_DIR_BACKUP;
 
 const GROUP_JID = process.env.GROUP_JID || '';
 
@@ -385,6 +400,35 @@ function withSources(result) {
  * matters until a person re-pairs. Doing nothing is the right behaviour
  * here, and it has to be a deliberate state rather than a crash.
  */
+/**
+ * Rejected by WhatsApp: use the spare number if there is one.
+ *
+ * Only on an outright logout. A dropped connection reconnects on its own
+ * and a rate limit passes; switching numbers over either is how you lose
+ * both of them.
+ *
+ * The spare is paired ahead of time into auth_info_backup and is already a
+ * member of the group, because pairing needs a human typing eight
+ * characters on a phone and there is no version of that which happens by
+ * itself at the moment it is needed.
+ */
+function switchToTheSpareNumber() {
+  if (usingBackup || !existsSync(new URL(AUTH_DIR_BACKUP, import.meta.url).pathname)) {
+    stayDownUntilSomebodyRepairs();
+    return;
+  }
+
+  usingBackup = true;
+  console.error(
+    `LOGGED OUT of the main number. Switching to the spare session in ` +
+      `${AUTH_DIR_BACKUP}. Tell somebody: the first number needs re-pairing ` +
+      'and there is no second spare.'
+  );
+  // A moment before reconnecting. Two sessions changing over inside a
+  // second, from one machine, is itself a thing worth not doing.
+  setTimeout(() => connectToWhatsApp(AUTH_DIR_BACKUP), 5000);
+}
+
 function stayDownUntilSomebodyRepairs() {
   const say = () =>
     console.error(
@@ -399,9 +443,9 @@ function stayDownUntilSomebodyRepairs() {
   setInterval(say, 10 * 60_000);
 }
 
-async function connectToWhatsApp() {
-  claimSession('the worker');
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+async function connectToWhatsApp(authDir = AUTH_DIR) {
+  claimSession(`the worker (${authDir})`);
+  const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
   const sock = makeWASocket({ auth: state, logger: quiet });
   sock.ev.on('creds.update', saveCreds);
@@ -418,8 +462,8 @@ async function connectToWhatsApp() {
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
       console.log('Connection closed. Reconnecting:', shouldReconnect);
-      if (shouldReconnect) connectToWhatsApp();
-      else stayDownUntilSomebodyRepairs();
+      if (shouldReconnect) connectToWhatsApp(authDir);
+      else switchToTheSpareNumber();
     } else if (connection === 'open') {
       console.log('WhatsApp bot is online.');
       checkGroupJid(sock).catch((e) => console.error('group check failed:', e.message));
