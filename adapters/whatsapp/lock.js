@@ -58,8 +58,34 @@ export function claimSession(what) {
     process.exit(1);
   }
 
-  mkdirSync(new URL(AUTH_DIR, import.meta.url).pathname, { recursive: true });
-  writeFileSync(LOCK, String(process.pid));
+  const dir = new URL(AUTH_DIR, import.meta.url).pathname;
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(LOCK, String(process.pid));
+  } catch (error) {
+    if (error.code !== 'EACCES' && error.code !== 'EPERM') throw error;
+
+    // Pairing as one user and running as another.
+    //
+    // `npm run groups` under sudo leaves auth_info owned by root, the
+    // service runs as somebody else, and the failure that follows is far
+    // worse than this crash: Baileys rewrites its keys continuously, so a
+    // session it cannot save breaks, and WhatsApp answers the next
+    // connection with a 401 that reads exactly like being logged out. We
+    // spent an evening re-pairing a number over that, which is the one
+    // thing that must not be done repeatedly.
+    console.error(
+      `Cannot write to ${AUTH_DIR}: ${error.code}.\n\n` +
+        'The session files belong to another user. This process cannot save ' +
+        'the keys WhatsApp rotates, and the connection would be dropped a ' +
+        'few seconds after it opens.\n\n' +
+        `Give them to the user this runs as:\n` +
+        `  sudo chown -R $(id -un):$(id -gn) ${dir}\n\n` +
+        'And pair as that user, not with sudo:\n' +
+        '  sudo -u <service user> npm run groups'
+    );
+    process.exit(1);
+  }
 
   const release = () => {
     try {
