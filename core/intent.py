@@ -284,6 +284,63 @@ HELLO_BACK = {
 FRENCH_GREETINGS = {"bonjour", "bonsoir", "salut", "coucou", "slt", "tout", "monde", "tous"}
 
 
+# Talk aimed at the bot, which is not what the group discussed.
+#
+# The group is testing the bot this week, so its history now holds "recap",
+# "hello", "merci" and "test" typed at it by dozens of people. Ingestion
+# keeps them and should: they were written by real members, in the group.
+# But a summary built from them describes the bot instead of the group. The
+# first one said "nothing of consequence happened today, just a request for
+# a summary and two replies about it", which is an accurate reading of a
+# window that held nothing but bot chatter, and a useless answer.
+#
+# Narrow on purpose, in two ways. Only short messages, and only ones where
+# every single word is chatter. "merci, et quelle est la date limite" keeps
+# its place in the history, and so does "ok Thursday works for me".
+BOT_TALK_MAX_WORDS = 6
+
+BOT_TALK_WORDS = frozenset(
+    {
+        "ask", "bot", "uniconnect", "test", "testing", "tester", "essai",
+        "recap", "récap", "resume", "résumé", "summary", "summarise",
+        "summarize",
+        "merci", "thanks", "thank", "you", "thx", "ty", "shukran", "asante",
+        "ok", "okay", "oui", "yes", "yeah", "yep", "noted", "vu", "bien",
+        "super", "parfait", "great", "nice", "cool", "bravo", "excellent",
+        "wow", "good", "job", "works", "marche", "top",
+    }
+)
+
+
+def is_bot_talk(text: str) -> bool:
+    """Is this message chatter at the bot rather than group content?
+
+    Used to decide what a summary reads, never what gets stored. Dropping a
+    message here hides it from one digest; dropping it at ingestion would
+    lose it for good.
+    """
+    stripped = strip_trigger(text)
+    words = re.findall(r"[\w']+", stripped.lower())
+    # No words at all: an emoji, a sticker caption, a lone "@ask". True
+    # whatever it was aimed at, since a summary has nothing to report from it.
+    if not words:
+        return True
+    if len(words) > BOT_TALK_MAX_WORDS:
+        return False
+    if is_greeting(stripped):
+        return True
+    return all(word in BOT_TALK_WORDS for word in words)
+
+
+def worth_summarising(rows: list[dict]) -> list[dict]:
+    """The messages of a window that a summary can actually report.
+
+    Kept as a list operation rather than a filter in SQL so that the numbers
+    the model cites, [1], [2], match the list it was given.
+    """
+    return [row for row in rows if not is_bot_talk(row.get("content") or "")]
+
+
 def greeting_language(question: str) -> str:
     """Which language to say hello back in.
 

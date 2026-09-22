@@ -11,7 +11,10 @@ catch up. Anything after it is, by definition, what they missed.
 """
 
 
+from datetime import UTC, datetime, timedelta
+
 import answer as answer_engine
+import intent
 from psycopg.rows import dict_row
 
 # A week of a busy group is more than an answer can usefully hold, and more
@@ -22,6 +25,25 @@ MAX_MESSAGES = 300
 # With no last_seen_at on record - someone using the bot for the first time -
 # summarise this much rather than the entire history.
 DEFAULT_WINDOW_HOURS = 48
+
+# Below this, the window is not a gap somebody was away for.
+#
+# last_seen_at moves forward whenever a person speaks, because somebody who
+# is talking has seen the group. So anyone who wrote in the group ten minutes
+# ago and then asks for a recap has an unread window holding those ten
+# minutes and nothing else. The bot read it literally and replied "nothing of
+# consequence happened today, just a request for a summary and two replies
+# about it": true of that window, and the worst answer it has given.
+#
+# Reporting nothing_new instead costs the asker nothing. The caller answers
+# with the day's digest, whose window is the last 24 hours and therefore
+# contains every message this briefing would have covered, plus the rest of
+# the day. Which is why the rule below also requires the window to start
+# inside that day: somebody genuinely away for a week, in a group that said
+# three things all week, still gets those three things.
+MIN_FOR_A_BRIEFING = 5
+
+COVERED_BY_THE_DIGEST = timedelta(hours=24)
 
 SYSTEM = """You are UniConnect, catching one person up on a WhatsApp group \
 they were away from.
@@ -101,6 +123,18 @@ def _touch(pool, user: str) -> None:
         pass
 
 
+def _too_thin(rows: list[dict], since) -> bool:
+    """Is this a handful of messages the day's digest already covers?
+
+    Both halves matter. Few messages alone is not enough: three messages in a
+    week is a real week to catch up on. Few messages inside the last day is a
+    person who never left.
+    """
+    if len(rows) >= MIN_FOR_A_BRIEFING:
+        return False
+    return datetime.now(UTC) - since < COVERED_BY_THE_DIGEST
+
+
 def catch_up(pool, user: str, group_id: str, question: str | None = None) -> dict:
     since, first_time = _since(pool, user)
 
@@ -117,17 +151,25 @@ def catch_up(pool, user: str, group_id: str, question: str | None = None) -> dic
     # Read oldest first: a briefing that runs backwards in time is unreadable.
     rows.reverse()
 
-    if not rows:
-        # Nothing unread. Reported rather than answered: somebody who typed
-        # "Recap" asked for a summary and being told there is nothing is a
-        # true statement and a useless reply. The caller sends them the
-        # day's digest instead, which is what they wanted.
+    # Chatter at the bot is not what the group said. On a testing day it is
+    # most of what the group said, and briefing somebody on it describes the
+    # bot to them instead of the group.
+    rows = intent.worth_summarising(rows)
+
+    if not rows or _too_thin(rows, since):
+        # Nothing unread, or nothing that amounts to a gap. Reported rather
+        # than answered: somebody who typed "Recap" asked for a summary and
+        # being told there is nothing is a true statement and a useless
+        # reply. The caller sends them the day's digest instead, which is
+        # what they wanted.
         _touch(pool, user)
         return {
             "summary": None,
             "nothing_new": True,
             "since": since.isoformat().replace("+00:00", "Z"),
-            "message_count": 0,
+            # The real count, not zero. A thin window is not an empty one,
+            # and a caller logging this should see what was actually there.
+            "message_count": len(rows),
             "truncated": False,
             "first_time": first_time,
         }

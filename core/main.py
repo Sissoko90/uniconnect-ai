@@ -236,6 +236,26 @@ class AskRequest(BaseModel):
     private: bool = False
 
 
+# How far back a digest reaches when the day itself has nothing to report.
+#
+# A recap is the last thing the bot can offer somebody who asked for one, so
+# it must not come back empty. With no widening, a quiet day returned no
+# digest at all and the request fell through to retrieval, where "recap" is
+# searched for as if it were a subject the group discusses, and answered with
+# "I could not find anything about this in the group history".
+QUIET_DAY_WIDENS_TO_HOURS = 24 * 7
+
+
+def _digest_with_something_in_it(pool, group_id: str, lang: str | None) -> dict:
+    """The group's day, or its week when the day was quiet."""
+    digest = recap.daily_digest(pool, group_id, lang=lang)
+    if digest.get("digest"):
+        return digest
+    return recap.daily_digest(
+        pool, group_id, lang=lang, hours=QUIET_DAY_WIDENS_TO_HOURS
+    )
+
+
 class AskResponse(BaseModel):
     answer: str
     sources: list[Source]
@@ -395,12 +415,12 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                     pool, user=req.user, group_id=req.group_id, question=question
                 )
                 if brief.get("nothing_new"):
-                    # Their bookmark is up to date, so there is nothing they
-                    # have not read. Somebody who typed "Recap" asked for a
+                    # Their bookmark is up to date, or close enough that the
+                    # gap is not one. Somebody who typed "Recap" asked for a
                     # summary, and "nothing new since your last visit" is
                     # true and useless: they get the group's day instead.
-                    digest = recap.daily_digest(
-                        pool, req.group_id, lang=answer_engine.detect_lang(question)
+                    digest = _digest_with_something_in_it(
+                        pool, req.group_id, answer_engine.detect_lang(question)
                     )
                     brief = {
                         "summary": digest.get("digest"),
@@ -422,8 +442,8 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
                 # bookmark, so serving it to an unauthenticated caller
                 # naming somebody else would hand over their briefing and
                 # silently lose them everything they had not read.
-                digest = recap.daily_digest(
-                    pool, req.group_id, lang=answer_engine.detect_lang(question)
+                digest = _digest_with_something_in_it(
+                    pool, req.group_id, answer_engine.detect_lang(question)
                 )
                 text, covering, count = (
                     digest.get("digest"), digest.get("since"), digest.get("message_count")

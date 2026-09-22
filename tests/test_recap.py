@@ -125,3 +125,12 @@ def test_enough_new_messages_make_it_stale():
 
 def test_nothing_cached_yet():
     assert recap._cached_overview(FakePool(row=None), "meti-cohort-1", "fr", 900) is None
+
+
+def test_the_digest_is_told_which_window_it_covers():
+    """The prompt calls this a daily digest, and a caller may have widened it
+    to a week because the day itself was quiet. Unsaid, the five lines opened
+    with "today" over messages from Tuesday."""
+    assert recap._window_name(None, 24) == "the last day"
+    assert recap._window_name(None, 24 * 7) == "the last 7 days"
+    assert recap._window_name("2026-09-22", 24) == "the whole of 2026-09-22"

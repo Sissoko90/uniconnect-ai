@@ -14,6 +14,7 @@ import re
 from datetime import UTC, datetime, timedelta
 
 import answer as answer_engine
+import intent
 import limits
 from psycopg.rows import dict_row
 
@@ -298,19 +299,39 @@ def call_recap(pool, source_id: str) -> dict:
     }
 
 
-def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None = None) -> dict:
+def _window_name(day: str | None, hours: int) -> str:
+    """How to describe the span covered, in the digest's own words."""
+    if day:
+        return f"the whole of {day}"
+    if hours <= 24:
+        return "the last day"
+    return f"the last {round(hours / 24)} days"
+
+
+def daily_digest(
+    pool,
+    group_id: str,
+    day: str | None = None,
+    lang: str | None = None,
+    hours: int = 24,
+) -> dict:
     """Five lines on what happened, for the group, once a day.
 
-    `day` is a date in UTC; omitted means the last 24 hours, which is what a
+    `day` is a date in UTC; omitted means the last `hours`, which is what a
     digest posted at a fixed hour actually wants. `lang` pins the language,
     falling back to DIGEST_LANG and then to the model's own reading.
+
+    `hours` exists for the caller that has nothing else to offer. Somebody
+    who asks for a recap on a quiet day should be told what the group has
+    been doing this week rather than dropped into retrieval, where "recap"
+    is searched for as a subject and found nowhere.
     """
     if day:
         since = datetime.fromisoformat(day).replace(tzinfo=UTC)
         until = since + timedelta(days=1)
     else:
         until = datetime.now(UTC)
-        since = until - timedelta(days=1)
+        since = until - timedelta(hours=hours)
 
     with pool.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -326,6 +347,12 @@ def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None =
             rows = cur.fetchall()
 
     rows.reverse()  # oldest first again: a digest reads forwards
+
+    # Chatter at the bot is not the group's day. Three hundred people trying
+    # the bot out produce hundreds of "recap", "test" and "merci" messages,
+    # and a digest that reads them reports on the bot to the group that has
+    # just spent the day looking at it.
+    rows = intent.worth_summarising(rows)
 
     result = {
         "since": since.isoformat().replace("+00:00", "Z"),
@@ -352,7 +379,11 @@ def daily_digest(pool, group_id: str, day: str | None = None, lang: str | None =
     result["digest"] = _write(
         f"{DIGEST_SYSTEM}\n\n{rule}",
         answer_engine.format_messages(rows),
-        f"Write the digest for the {len(rows)} messages above.",
+        # The window is named because the prompt calls this a daily digest
+        # and the caller may have widened it to a week. Without this the
+        # five lines opened with "today" over messages from Tuesday.
+        f"Write the digest for the {len(rows)} messages above. "
+        f"They cover {_window_name(day, hours)}.",
         max_tokens=4000,
         effort="medium",
         pool=pool,
