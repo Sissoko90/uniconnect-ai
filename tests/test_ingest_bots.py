@@ -45,3 +45,49 @@ def test_a_message_with_no_name_is_kept():
     """Most messages arrive without a pushName. Refusing those would empty
     the history."""
     assert not ingest.written_by_a_bot({"author": "+22370000000@s.whatsapp.net"})
+
+
+# --------------------------------------------------------------------------
+# What live ingestion had never learned
+# --------------------------------------------------------------------------
+
+
+def test_a_command_to_another_teams_bot_is_not_group_content():
+    """The export parser has had this rule since a question typed at a rival
+    bot became the source for somebody else's answer. Live ingestion never
+    got it, so it kept storing them."""
+    for content in [
+        "@~Jymns Bot Okay provide the session video links",
+        "@~Jymns Bot I need an email to submit my team member list",
+        "@Nexus Bot what is the deadline",
+        "@ask what is the deadline",
+    ]:
+        assert ingest.written_by_a_bot({"author_name": "N", "content": content}), content
+
+
+def test_a_bots_own_output_pasted_into_the_group_is_not_either():
+    """Our bot cited one of these. The link it gave was correct and the
+    message it credited was another bot's summary, so a claim invented
+    elsewhere came back wearing our citation."""
+    assert ingest.written_by_a_bot(
+        {
+            "author_name": "N",
+            "content": "Here is what I currently know about the *UniPods METI AI Programme*",
+        }
+    )
+
+
+def test_the_people_behind_those_accounts_keep_their_messages():
+    """Both accounts belong to real members, with forty messages between
+    them, arguing about bots in their own words. An earlier reading of this
+    took them for bots, and deleting by author would have erased people."""
+    for content in [
+        "Dude that was not automated, it's manually typed can't you see dude",
+        "If my bot performed like that, I'd be glad to take the removal sacrifice.",
+        "Nexus is back - Inbox (DM). You can ask anything from now on.",
+        "Ask Nexus Bot in inbox u get a reliable info.",
+        "It's completely wrong",
+    ]:
+        assert not ingest.written_by_a_bot(
+            {"author_name": "N", "content": content}
+        ), content

@@ -111,6 +111,41 @@ BOT_NAMES = {
 }
 
 
+# A command given to another team's bot, or to ours.
+#
+# The export parser has had this rule since the day a question typed at a
+# rival bot became the source for somebody else's answer. Live ingestion
+# never got it, so it kept storing them: "@~Jymns Bot Okay provide the
+# session video links" sat in the history as something the group had said,
+# ready to be retrieved and cited.
+#
+# Six bots were tested in this group in one week. The @ask half of this is
+# handled in the worker, which is where the trigger is known; this catches
+# everybody else's.
+ADDRESSED_TO_BOT = re.compile(r"^\s*@(ask\b|\S{1,30}\s+bot\b)", re.IGNORECASE)
+
+# The opening of a message that is a bot's output, pasted or posted into the
+# group by something whose name gives nothing away.
+#
+# Our bot cited one of these as a source: the link it gave was right, but
+# the message it credited was another bot's summary, so a claim invented
+# elsewhere came back wearing our citation. The author was a real person
+# with a one letter name, so every rule we had about names missed it.
+#
+# Deliberately a fixed opening rather than a shape. Long messages with bold
+# headings and bullet lists are also how a careful human posts a programme
+# announcement, and losing one of those costs more than keeping this.
+GENERATED_OPENERS = (
+    "here is what i currently know about",
+    "here's what i currently know about",
+    "voici ce que je sais actuellement sur",
+)
+
+
+def looks_generated(content: str) -> bool:
+    return (content or "").strip().casefold().startswith(GENERATED_OPENERS)
+
+
 def written_by_a_bot(message: dict) -> bool:
     """A bot's own words, including ours. Never stored, never cited."""
     name = (message.get("author_name") or "").strip().casefold()
@@ -118,7 +153,11 @@ def written_by_a_bot(message: dict) -> bool:
         return True
     # A name ending in "bot" is one, whatever the organiser asked teams to
     # call theirs, and every team was asked to end its bot's name that way.
-    return name.endswith(" bot") or name.endswith("-bot") or name.endswith("_bot")
+    if name.endswith(" bot") or name.endswith("-bot") or name.endswith("_bot"):
+        return True
+
+    content = message.get("content") or ""
+    return bool(ADDRESSED_TO_BOT.match(content)) or looks_generated(content)
 
 
 def store(pool, group_id: str, messages: list[dict]) -> dict:
@@ -126,7 +165,11 @@ def store(pool, group_id: str, messages: list[dict]) -> dict:
     received = len(messages)
     messages = [m for m in messages if not written_by_a_bot(m)]
     if len(messages) < received:
-        print(f"dropped {received - len(messages)} messages from other bots", flush=True)
+        print(
+            f"dropped {received - len(messages)} messages written by a bot or "
+            "addressed to one",
+            flush=True,
+        )
 
     if not messages:
         return {"received": received, "stored": 0}
