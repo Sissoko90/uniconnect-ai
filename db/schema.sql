@@ -284,3 +284,53 @@ create table user_state (
   last_seen_at timestamptz,
   updated_at timestamptz default now()
 );
+
+-- A document, translated once and kept.
+--
+-- The hackathon guidelines exist in the group as an English PDF. Half this
+-- group works in French and has said so, in this group. Translating the
+-- brief costs a model call and about a minute; it must not cost that again
+-- for the second person who asks. The English rendering is stored too, so
+-- both languages are served from one place.
+create table document_renderings (
+  source_id uuid not null references sources(id) on delete cascade,
+  lang text not null,
+  text text not null,
+  built_at timestamptz not null default now(),
+  primary key (source_id, lang)
+);
+
+-- The nightly poll: does the group want this bot.
+--
+-- Distinct from satisfaction, which asks one person once, in private, after
+-- five questions. This is a WhatsApp poll posted in the group every evening,
+-- so the same person votes again tomorrow and the tally is visible to all
+-- 390 members. That visibility is the point: the hackathon is decided by a
+-- vote of the group.
+create table poll_votes (
+  id uuid primary key default gen_random_uuid(),
+  group_id text not null,
+
+  -- The WhatsApp id of the poll message. A vote arrives carrying the id of
+  -- the poll it belongs to and nothing else, which is also what keeps two
+  -- evenings' votes apart.
+  poll_id text not null,
+
+  -- The evening the poll was posted, in UTC, which for Mali is local time.
+  poll_day date not null,
+
+  voter text not null,
+  -- 'yes' or 'no'. Stored as the meaning, not as the button text: the poll
+  -- is bilingual and the option somebody tapped was spelled in whichever
+  -- language they read.
+  choice text not null check (choice in ('yes', 'no')),
+
+  voted_at timestamptz not null default now(),
+
+  -- WhatsApp lets a person change their vote, and sends the whole new
+  -- selection when they do. One row per person per poll, overwritten: the
+  -- last thing they said is what they think.
+  unique (poll_id, voter)
+);
+
+create index poll_votes_group_day on poll_votes (group_id, poll_day desc);

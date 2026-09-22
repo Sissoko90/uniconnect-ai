@@ -18,11 +18,16 @@
  * so the decision lives here, in one file.
  */
 
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import makeWASocket, {
   DisconnectReason,
+  decryptPollVote,
   downloadMediaMessage,
+  getKeyAuthor,
+  jidNormalizedUser,
+  normalizeMessageContent,
   useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
@@ -84,11 +89,35 @@ const ALERT_INTERVAL_MS = Number(process.env.ALERT_INTERVAL_MINUTES || 5) * 60_0
 
 // The hour, in UTC, at which the daily digest goes out.
 //
-// 07:00 UTC, because the group runs from UTC+0 to UTC+3: nobody gets it
-// before 7am their time (Mali, Senegal) and nobody after 10am (Uganda,
-// Kenya). Morning beats evening for this: people open WhatsApp, see what they
-// missed, and start the day with it.
-const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC || 7);
+// 05:00, which is 05:00 in Bamako: Mali is UTC+0 all year and has no summer
+// time, so the two clocks are the same one and no conversion is needed here
+// or anywhere below. Further east the group wakes up to it later, 06:00 in
+// Lagos and 08:00 in Kampala, which is still morning.
+//
+// Morning beats evening for a digest: people open WhatsApp, read what they
+// missed overnight, and start the day with it.
+const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC || 5);
+
+// The hour, in UTC, at which the poll goes out. 23:00 in Bamako, at the end
+// of the day it is asking about.
+//
+// A real WhatsApp poll, not a message asking for a reply. WhatsApp shows the
+// running tally to everybody, which is the point: the hackathon is decided
+// by a vote of this group, so the group should be able to see what it thinks
+// before it is asked to vote, and we should have to live with the answer in
+// public. Two buttons, one choice, nothing to type.
+const POLL_HOUR_UTC = Number(process.env.POLL_HOUR_UTC || 23);
+
+// Both are bilingual, because half this group works in French and has said
+// so in this group. One poll in two languages, not two polls.
+const POLL_QUESTION =
+  process.env.POLL_QUESTION ||
+  'Do you find UniConnect useful? / Trouvez-vous UniConnect utile ?';
+
+// The button text is what a voter taps; the meaning is what we store. They
+// are kept apart so the wording can change without rewriting the history.
+const POLL_YES = process.env.POLL_YES || 'Yes / Oui 👍';
+const POLL_NO = process.env.POLL_NO || 'No / Non 👎';
 
 // Whether the bot is allowed to write in the group at all, uninvited.
 //
@@ -649,6 +678,11 @@ async function handle(sock, msg) {
   }
   const when = Number(msg.messageTimestamp);
 
+  // A vote on the evening poll. Checked before the text, because a vote
+  // carries no text at all and would otherwise be dropped two lines below
+  // as an empty message.
+  if (await handlePollVote(sock, msg, sender)) return;
+
   // A voice note: the most invisible thing in the group. Store it and say
   // nothing - reading everything, writing almost nothing.
   if (msg.message?.audioMessage && inGroup) {
@@ -1068,10 +1102,15 @@ function startBackgroundJobs(sock) {
     ALERT_INTERVAL_MS
   );
   setInterval(() => maybePostDigest(sock).catch((e) => console.error(e.message)), 10 * 60_000);
+  // The evening poll, on its own timer of the same length. Both jobs check
+  // the clock themselves and do nothing outside their hour, so ten minutes
+  // is simply how long a restart can delay either of them.
+  setInterval(() => maybePostPoll(sock).catch((e) => console.error(e.message)), 10 * 60_000);
   // Once at startup as well. Without it, INTRODUCE_NOW still waits for the
   // first tick of the timer, which is ten minutes of wondering whether the
   // flag worked.
   maybePostDigest(sock).catch((e) => console.error(e.message));
+  maybePostPoll(sock).catch((e) => console.error(e.message));
   maybeAnnounce(sock).catch((e) => console.error('announcement failed:', e.message));
 }
 
@@ -1204,13 +1243,24 @@ function digestState() {
         ? [state.group].filter(Boolean)
         : [];
 
+    // The same rule as the digest day: state that belongs to another group
+    // is not ours to read. A poll posted in the test group must not be
+    // credited to the real one, or tonight's poll never goes out.
+    const ours = state.group === GROUP_JID || !state.group;
+
     return {
       met,
       introduced: met.includes(GROUP_JID),
-      day: state.group === GROUP_JID || !state.group ? state.day : null,
+      day: ours ? state.day : null,
+      // The poll we last posted: the evening, its message id and the key
+      // its votes are encrypted with. On disk rather than in memory
+      // because votes arrive for hours afterwards and systemd restarts
+      // this worker on any failure. Without the key, every vote cast
+      // after a restart would be unreadable.
+      poll: ours ? state.poll || null : null,
     };
   } catch {
-    return { met: [], introduced: false, day: null }; // never posted
+    return { met: [], introduced: false, day: null, poll: null }; // never posted
   }
 }
 
@@ -1218,10 +1268,24 @@ function saveDigestState(state) {
   writeFileSync(DIGEST_STATE, JSON.stringify(state));
 }
 
+/** Remember tonight's poll, so its votes can still be read tomorrow. */
+function markPollSent(state, today, id, secret) {
+  const met = state.met.includes(GROUP_JID) ? state.met : [...state.met, GROUP_JID];
+  saveDigestState({
+    group: GROUP_JID,
+    day: state.day,
+    met,
+    poll: { day: today, id, secret },
+  });
+}
+
 /** Mark this group done for today, and remembered as introduced. */
 function markDone(state, today) {
   const met = state.met.includes(GROUP_JID) ? state.met : [...state.met, GROUP_JID];
-  saveDigestState({ group: GROUP_JID, day: today, met });
+  // The poll is carried through. It is written by the evening job and read
+  // for hours after that, so a morning that dropped it would make every
+  // vote cast during the day unreadable.
+  saveDigestState({ group: GROUP_JID, day: today, met, poll: state.poll || null });
 }
 
 /** Five lines, once a day, in the group. Checked every ten minutes. */
@@ -1263,7 +1327,14 @@ async function maybePostDigest(sock) {
     return;
   }
 
-  const result = await api.digest(GROUP_ID, process.env.DIGEST_LANG || 'en');
+  // Yesterday whole, morning to evening, rather than the 24 hours ending
+  // now. Posted at 05:00 those two windows look alike, and they are not:
+  // a window ending now begins at 05:00 yesterday and silently drops
+  // everything said between midnight and dawn the day before. A calendar
+  // day is also what somebody reading it at breakfast thinks they are
+  // being given.
+  const yesterday = new Date(now.getTime() - 24 * 3600_000).toISOString().slice(0, 10);
+  const result = await api.digest(GROUP_ID, process.env.DIGEST_LANG || 'en', yesterday);
 
   // A quiet day is a result, not an error. Announcing silence is noise, and
   // the day counts as done: there is nothing to retry.
@@ -1277,8 +1348,8 @@ async function maybePostDigest(sock) {
   await humanPause();
   await sock.sendMessage(GROUP_JID, {
     text:
-      `Here is what happened since yesterday:\n\n${result.digest}\n\n` +
-      'Ask me anything about it in private.',
+      `Here is what happened yesterday, ${yesterday}:\n\n${result.digest}\n\n` +
+      'Ask me anything about it in private. / Pose-moi tes questions en privé.',
   });
 
   // Marked done only once it has actually gone out.
@@ -1291,6 +1362,124 @@ async function maybePostDigest(sock) {
   // digest hour lasts.
   markDone(state, today);
   console.log('digest posted');
+}
+
+/** A vote on tonight's poll, read and recorded. True if it was one.
+ *
+ * Votes are end to end encrypted like everything else, and this version of
+ * Baileys has its own decryption of them commented out, so it arrives as an
+ * opaque payload and no library call will turn it into an answer. We hold
+ * the one thing that can: the key WhatsApp generated when we created the
+ * poll, kept on disk since.
+ *
+ * What comes back is a set of SHA-256 hashes of the option text, not the
+ * text, so the buttons are hashed here and compared. That also means the
+ * wording of an option cannot be changed while a poll is open: change it and
+ * every vote on it stops matching anything.
+ *
+ * A failure here is logged and swallowed. WhatsApp shows the group its own
+ * tally whatever we manage to read, so the poll still does its job; only
+ * our copy of the numbers is lost.
+ */
+async function handlePollVote(sock, msg, sender) {
+  const content = normalizeMessageContent(msg.message);
+  const update = content?.pollUpdateMessage;
+  if (!update) return false;
+
+  const state = digestState();
+  const creationKey = update.pollCreationMessageKey;
+
+  // Not our current poll: an older one, or one somebody else created. We
+  // have no key for it and guessing is not possible.
+  if (!state.poll?.id || !state.poll.secret || creationKey?.id !== state.poll.id) {
+    console.log('a vote on a poll we have no key for, ignored');
+    return true;
+  }
+
+  try {
+    const meId = jidNormalizedUser(sock.user?.id);
+    const vote = decryptPollVote(update.vote, {
+      pollEncKey: Buffer.from(state.poll.secret, 'base64'),
+      pollCreatorJid: getKeyAuthor(creationKey, meId),
+      pollMsgId: creationKey.id,
+      voterJid: getKeyAuthor(msg.key, meId),
+    });
+
+    // WhatsApp sends the whole new selection every time somebody changes
+    // their mind, and an empty one when they untap their answer. Recording
+    // only the first shape would leave a withdrawn vote counted for ever.
+    const choice = choiceFrom(vote.selectedOptions || []);
+    await api.pollVote(GROUP_ID, state.poll.id, state.poll.day, sender, choice);
+    console.log(`poll vote from ${sender}: ${choice || 'withdrawn'}`);
+  } catch (error) {
+    console.error('could not read a poll vote:', error.message);
+  }
+  return true;
+}
+
+const hashOf = (text) => createHash('sha256').update(Buffer.from(text)).digest('hex');
+
+/** Which button was tapped, by the hash of its text. Null means none. */
+function choiceFrom(selected) {
+  const hashes = selected.map((option) => Buffer.from(option).toString('hex'));
+  if (hashes.includes(hashOf(POLL_YES))) return 'yes';
+  if (hashes.includes(hashOf(POLL_NO))) return 'no';
+  return null;
+}
+
+/** One poll, once an evening, in the group. Checked by the same timer.
+ *
+ * Deliberately the second and last thing the bot says uninvited. Two posts a
+ * day is the whole of its voice in a group that has asked for less bot
+ * noise: what happened, in the morning, and one question, at night.
+ */
+async function maybePostPoll(sock) {
+  if (!POSTS_IN_GROUP) return;
+
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  if (now.getUTCHours() !== POLL_HOUR_UTC) return;
+
+  const state = digestState();
+  if (state.poll?.day === today) return;
+
+  // Never before the group has been introduced. Asking 390 people whether
+  // they find a bot useful, when the bot has never said what it is, gets
+  // the answer it deserves.
+  if (!state.introduced) {
+    console.log('not introduced yet, no poll tonight');
+    return;
+  }
+
+  await underTheCeiling();
+  await humanPause();
+  const sent = await sock.sendMessage(GROUP_JID, {
+    poll: {
+      name: POLL_QUESTION,
+      values: [POLL_YES, POLL_NO],
+      // One answer each. It also decides the wire format: a single choice
+      // poll is sent as pollCreationMessageV3, which is what phones render
+      // as the familiar poll card.
+      selectableCount: 1,
+    },
+  });
+
+  // The key every vote on this poll is encrypted with. Baileys generates it
+  // when it builds the message and puts it here; there is no second chance
+  // to read it, and without it the votes are noise.
+  const secret = sent.message?.messageContextInfo?.messageSecret;
+  if (!sent.key?.id || !secret) {
+    // The poll is on people's phones either way, and WhatsApp will show
+    // them the tally. Only our own record of it is lost, so this is worth
+    // saying out loud and not worth retrying: a second poll tonight would
+    // be worse than an uncounted one.
+    console.warn('poll posted but its key was not returned, votes will not be recorded');
+    markPollSent(state, today, sent.key?.id || null, null);
+    return;
+  }
+
+  markPollSent(state, today, sent.key.id, Buffer.from(secret).toString('base64'));
+  console.log(`poll posted for ${today}`);
 }
 
 // --------------------------------------------------------------------------

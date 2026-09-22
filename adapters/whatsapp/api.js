@@ -89,11 +89,41 @@ export const pendingAlerts = (groupId) => call('GET', `/alerts/${encodeURICompon
 /** Confirm delivery, so nobody is told the same thing twice. */
 export const alertsSent = (ids) => call('POST', '/alerts/sent', { body: { ids } });
 
-/** Five lines on the last 24 hours. */
-export const digest = (groupId, lang) =>
-  call('GET', `/digest/${encodeURIComponent(groupId)}${lang ? `?lang=${lang}` : ''}`, {
+/** What happened, for the group.
+ *
+ * `day` is a calendar day in UTC, which is the morning post's window: a
+ * whole day from its morning to its evening, not the 24 hours ending now.
+ * Omitted, it is the last 24 hours, which is what a caller answering
+ * somebody's "recap" wants.
+ */
+export const digest = (groupId, lang, day) => {
+  const query = new URLSearchParams();
+  if (lang) query.set('lang', lang);
+  if (day) {
+    query.set('day', day);
+    // A whole day deserves more than the five lines a quiet interval gets.
+    query.set('lines', String(MORNING_LINES));
+  }
+  const suffix = query.toString();
+  return call('GET', `/digest/${encodeURIComponent(groupId)}${suffix ? `?${suffix}` : ''}`, {
     timeout: SLOW_MS,
   });
+};
+
+// How long the morning digest may run. A ceiling, not a target: a quiet day
+// still gets one line. Past a phone screen a bot posting uninvited into a
+// group of 390 people gets muted, which is why this is eight and not twenty.
+const MORNING_LINES = Number(process.env.MORNING_DIGEST_LINES || 8);
+
+/** One member's answer to tonight's poll. `choice` null means withdrawn. */
+export const pollVote = (groupId, pollId, day, voter, choice) =>
+  call('POST', '/poll/vote', {
+    body: { group_id: groupId, poll_id: pollId, day, voter, choice },
+  });
+
+/** Each evening's tally, most recent first. */
+export const pollResults = (groupId) =>
+  call('GET', `/poll/${encodeURIComponent(groupId)}`);
 
 /** The group's schedule, as monospace text. */
 export const timeline = (groupId) =>

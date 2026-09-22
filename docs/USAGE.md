@@ -101,21 +101,62 @@ WhatsApp profile, so the message and the contact card agree.
 That happens once. Posting the full history every morning would repeat
 itself daily and be muted by the end of the week.
 
-Every morning after that, at 07:00 UTC, it posts five lines on what happened
-since the day before, each one citing the message it came from. If the day
-was quiet, it posts nothing rather than announcing the silence.
+Every morning after that, at **05:00 in Bamako**, it posts what happened the
+day before, morning to evening, each line citing the message it came from. Up
+to eight lines, fewer when there is less to say, and nothing at all on a quiet
+day rather than an announcement of the silence.
 
-The hour is chosen for the spread of the group, which runs from UTC+0 to
-UTC+3: nobody gets it before 7am their time, nobody after 10am.
+It covers a calendar day, not the last 24 hours. Those two windows look alike
+at five in the morning and are not: a rolling window would drop everything
+said between midnight and dawn the day before.
+
+Mali is UTC+0 all year, so the server clock and Bamako's are the same one.
+Further east the group wakes up to it a little later.
 
 | | |
 |---|---|
-| Mali, Senegal | 07:00 |
-| Benin, Nigeria | 08:00 |
-| Rwanda, Zimbabwe, South Africa | 09:00 |
-| Uganda, Kenya | 10:00 |
+| Mali, Senegal | 05:00 |
+| Benin, Nigeria | 06:00 |
+| Rwanda, Zimbabwe, South Africa | 07:00 |
+| Uganda, Kenya | 08:00 |
 
-Change it with `DIGEST_HOUR_UTC` in the worker's `.env`.
+Change it with `DIGEST_HOUR_UTC`, and its length with `MORNING_DIGEST_LINES`.
+
+### The evening poll
+
+At **23:00 in Bamako**, at the end of the day it is asking about, the bot
+posts one WhatsApp poll:
+
+> Do you find UniConnect useful? / Trouvez-vous UniConnect utile ?
+>
+> - Yes / Oui 👍
+> - No / Non 👎
+
+A real poll, not a message asking for a reply: two buttons, one choice,
+nothing to type, and WhatsApp shows the running tally to everybody. That
+visibility is the point. The group should be able to see what it thinks
+before it is asked to vote, and we should have to live with the answer in
+public.
+
+The votes are also recorded, by evening, so the trend can be read back:
+
+```
+GET /poll/<group_id>
+```
+
+Votes are end to end encrypted like everything else. The bot can read them
+only because it created the poll and kept the key; if that key is ever lost,
+the poll still works and the group still sees its tally, and only our own
+copy of the numbers goes missing.
+
+`POLL_HOUR_UTC` moves it, `POLL_QUESTION`, `POLL_YES` and `POLL_NO` change
+the wording, and `DIGEST_ENABLED=false` turns off both this and the morning
+post. Do not change the wording while a poll is open: a vote arrives as a
+hash of the button text, so renaming an option makes every vote on it
+unreadable.
+
+These two posts are the whole of what the bot says uninvited. What happened,
+in the morning; one question, at night.
 
 ---
 

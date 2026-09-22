@@ -41,6 +41,7 @@ import intent
 import limits
 import metrics as metrics_engine
 import pdf as pdf_engine
+import poll
 import recap
 import satisfaction
 import timeline as timeline_engine
@@ -91,6 +92,7 @@ EXPECTED_TABLES = (
     "model_usage",
     "overview_cache",
     "document_renderings",
+    "poll_votes",
 )
 
 
@@ -647,6 +649,44 @@ def survey_rating(req: SurveyRating) -> dict:
 
 
 # --------------------------------------------------------------------------
+# The nightly poll
+# --------------------------------------------------------------------------
+
+
+class PollVote(BaseModel):
+    group_id: str
+    poll_id: str
+    # The evening the poll went out, as YYYY-MM-DD in UTC, which for Mali is
+    # local time. Sent by the worker rather than taken from the clock here:
+    # a vote cast at ten past midnight belongs to the poll it answers, not to
+    # the day it arrived.
+    day: str
+    voter: str
+    # None when somebody untapped their answer. WhatsApp sends the whole new
+    # selection on every change, so an empty one means they withdrew.
+    choice: str | None = None
+
+
+@app.post("/poll/vote", dependencies=[Depends(auth.require_worker)])
+def poll_vote(req: PollVote) -> dict:
+    """One member's answer to tonight's poll, or its withdrawal."""
+    if req.choice is None:
+        poll.withdraw(pool, req.poll_id, req.voter)
+        return {"recorded": False, "withdrawn": True}
+    return {
+        "recorded": poll.record(
+            pool, req.group_id, req.poll_id, req.day, req.voter, req.choice
+        )
+    }
+
+
+@app.get("/poll/{group_id}", dependencies=[Depends(auth.require_worker)])
+def poll_results(group_id: str, limit: int = 14) -> dict:
+    """Each evening's tally, most recent first."""
+    return poll.results(pool, group_id, limit)
+
+
+# --------------------------------------------------------------------------
 # Mention alerts
 # --------------------------------------------------------------------------
 
@@ -855,14 +895,28 @@ def latest_call_recap(group_id: str) -> dict:
 
 
 @app.get("/digest/{group_id}", dependencies=[Depends(auth.require_worker)])
-def daily_digest(group_id: str, day: str | None = None, lang: str | None = None) -> dict:
-    """Five lines on the last 24 hours, or on `day` (YYYY-MM-DD, UTC).
+def daily_digest(
+    group_id: str,
+    day: str | None = None,
+    lang: str | None = None,
+    lines: int | None = None,
+) -> dict:
+    """What happened in the last 24 hours, or on `day` (YYYY-MM-DD, UTC).
+
+    `day` is what the morning post uses: a whole calendar day, from its
+    morning to its evening, rather than a 24 hour window ending now. In Mali
+    the two clocks agree, so a UTC day is the day the group lived.
+
+    `lines` raises the ceiling on its length for that post, which covers a
+    whole day rather than a quiet interval.
 
     `quiet` true means nothing happened worth posting. That is a result, not
     an error: the worker should post nothing rather than announce silence.
     """
     limits.assert_budget(pool)
-    return _needs_a_model(lambda: recap.daily_digest(pool, group_id, day, lang))
+    return _needs_a_model(
+        lambda: recap.daily_digest(pool, group_id, day, lang, lines=lines)
+    )
 
 
 @app.get("/documents/{group_id}", dependencies=[Depends(auth.require_worker)])
