@@ -343,6 +343,35 @@ def asks_what_it_can_do(question: str) -> bool:
     return any(w in lowered for w in A_MEDIUM) and any(c in lowered for c in CAN_YOU)
 
 
+# A question whose answer changes with the day it is asked on.
+#
+# "What session are we having tomorrow and what's the time?" was answered,
+# then asked again ninety seconds later and answered identically, because a
+# repeated question is served from the stored answer without calling the
+# model. That is the right thing to do for "what is the deadline", whose
+# answer is a fixed date, and the wrong thing here: asked today and asked
+# last week, those are different questions wearing the same words.
+#
+# Reuse saves about 1.7 cents. An answer about the wrong day costs somebody
+# the session.
+RELATIVE_TIME = (
+    "today", "tonight", "tomorrow", "yesterday", "this morning",
+    "this afternoon", "this evening", "this week", "this weekend",
+    "next week", "next session", "right now", "currently", "at the moment",
+    "coming up", "upcoming", "so far",
+    "aujourd'hui", "ce soir", "cet après-midi", "cet apres-midi",
+    "ce matin", "demain", "hier", "cette semaine", "ce week-end",
+    "la semaine prochaine", "semaine prochaine", "prochaine session",
+    "en ce moment", "maintenant", "à venir", "a venir",
+)
+
+
+def is_time_sensitive(question: str) -> bool:
+    """Would this question mean something different if asked tomorrow?"""
+    lowered = flatten(question)
+    return any(phrase in lowered for phrase in RELATIVE_TIME)
+
+
 def wants_the_timeline(question: str) -> bool:
     """A request for the group's dates rather than a question about one.
 

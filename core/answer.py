@@ -17,6 +17,7 @@ import unicodedata
 from datetime import UTC, datetime
 
 import embeddings
+import intent
 import limits
 from psycopg.rows import dict_row
 
@@ -752,11 +753,30 @@ limit 1
 
 
 def find_duplicate(
-    pool, qvec: list[float] | None, group_id: str, private: bool = False
+    pool,
+    qvec: list[float] | None,
+    group_id: str,
+    private: bool = False,
+    question: str = "",
 ) -> dict | None:
     """The same question, already answered. Returns None when there is none."""
     if qvec is None:
         return None  # without embeddings we cannot tell two wordings apart
+
+    # A question about today or tomorrow is not the same question a week
+    # later, however exactly the words match.
+    #
+    # "What session are we having tomorrow and what's the time?" was asked
+    # twice, ninety seconds apart, and came back identical both times: the
+    # second was served from the stored answer, so the fix that had just
+    # been deployed could not reach it. That was the visible symptom. The
+    # real one is quieter: an answer about Tuesday, reused on Thursday, with
+    # nothing about it to suggest it is stale.
+    #
+    # Reuse saves about 1.7 cents. Sending somebody to a meeting that
+    # happened last week costs them the meeting.
+    if intent.is_time_sensitive(question):
+        return None
 
     with pool.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -959,7 +979,7 @@ def answer_question(
     # Asked before? Reuse the answer rather than paying for it twice - and in
     # the group, this is what lets the bot reply "this was answered on the
     # 12th" instead of adding another copy of the same thread.
-    if (dup := find_duplicate(pool, qvec, group_id, private)) is not None:
+    if (dup := find_duplicate(pool, qvec, group_id, private, question)) is not None:
         # Recorded like any other answer, even though it cost nothing.
         #
         # Returning early without recording looked harmless and was not. It

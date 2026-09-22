@@ -61,3 +61,43 @@ def test_the_digest_and_the_briefing_are_told_too():
     repeats "tomorrow" from a message sent last week moves a deadline."""
     assert "Today's date is given with the request" in recap.DIGEST_SYSTEM
     assert "Today's date is given below" in catchup.SYSTEM
+
+
+# --------------------------------------------------------------------------
+# The same words are not always the same question
+# --------------------------------------------------------------------------
+
+
+def test_a_question_about_tomorrow_is_never_reused():
+    """Asked twice ninety seconds apart, "what session are we having
+    tomorrow" came back identical both times: the second was served from
+    the stored answer, so the fix deployed in between could not reach it.
+
+    The visible symptom. The quiet one is an answer about Tuesday, reused on
+    Thursday, with nothing about it to suggest it is stale."""
+    import intent
+
+    for question in [
+        "What session are we having tomorrow and what's the time?",
+        "what's on today",
+        "quelle session avons-nous demain ?",
+        "c'est quoi le programme cette semaine",
+        "what is coming up next week",
+        "y a-t-il une réunion ce soir",
+    ]:
+        assert intent.is_time_sensitive(question), question
+
+
+def test_a_question_with_a_fixed_answer_is_still_reused():
+    """Reuse is worth keeping. A deadline is a date: the answer is the same
+    today, tomorrow and in a fortnight, and paying for it twice is waste."""
+    import intent
+
+    for question in [
+        "what is the submission deadline",
+        "quelle est la date limite",
+        "who do I contact about Wadhwani",
+        "what is the prize",
+        "how many people can be on a team",
+    ]:
+        assert not intent.is_time_sensitive(question), question
