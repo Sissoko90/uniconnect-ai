@@ -326,6 +326,49 @@ function textOf(msg) {
     .trim();
 }
 
+/** The message this one is replying to, if any.
+ *
+ * "@ask translate this" is a reply to something. Without the quoted text
+ * the bot has no idea what "this" is, and it answered three people in a row
+ * with the same list of French messages picked at random from the history,
+ * one of which was a command somebody had typed at another team's bot.
+ *
+ * WhatsApp sends the quoted message with the reply. We were throwing it
+ * away, which made every "translate this", "explain this" and "what does
+ * this mean" unanswerable, and those are the most natural things to ask a
+ * bot sitting in a busy group.
+ */
+/** The question, with the message it was a reply to attached.
+ *
+ * Labelled rather than merged, so the model can tell the person's words
+ * from the words they pointed at, and so that a request to translate or
+ * explain has something to act on.
+ */
+function withQuoted(question, quoted) {
+  if (!quoted) return question;
+  const trimmed =
+    quoted.text.length > 1500 ? `${quoted.text.slice(0, 1500)}...` : quoted.text;
+  return `${question}\n\n[replying to this message]\n${trimmed}`;
+}
+
+function quotedIn(msg) {
+  const context = msg.message?.extendedTextMessage?.contextInfo;
+  const quoted = context?.quotedMessage;
+  if (!quoted) return null;
+
+  const text = (
+    quoted.conversation ||
+    quoted.extendedTextMessage?.text ||
+    quoted.imageMessage?.caption ||
+    quoted.videoMessage?.caption ||
+    ''
+  )
+    .replace(INVISIBLE, '')
+    .trim();
+
+  return text ? { text, from: context.participant || '' } : null;
+}
+
 /** Who sent it: the participant in a group, the chat itself in a direct message. */
 const senderOf = (msg) => msg.key.participant || msg.key.remoteJid || '';
 
@@ -761,7 +804,7 @@ async function handleGroup(sock, msg, text, sender) {
 
   console.log('@ask in the group, answering');
 
-  const question = text.slice(4).trim();
+  const question = withQuoted(text.slice(4).trim(), quotedIn(msg));
   if (!question) {
     await reply(sock, msg, 'Ask me something after @ask - for example: @ask what is the deadline?');
     return;
@@ -821,9 +864,10 @@ async function handlePrivate(sock, msg, text, sender) {
     return;
   }
 
-  const result = await answerOrExplain(sock, msg, text, () =>
+  const asked = withQuoted(text, quotedIn(msg));
+  const result = await answerOrExplain(sock, msg, asked, () =>
     whileThinking(sock, msg.key.remoteJid, () =>
-      api.ask(text, sender, GROUP_ID, true)
+      api.ask(asked, sender, GROUP_ID, true)
     )
   );
   if (!result) return;
