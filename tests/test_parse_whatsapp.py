@@ -194,3 +194,27 @@ def test_any_bot_in_the_export_is_dropped(tmp_path):
 
     # Talbot is a person. The boundary is what makes the difference.
     assert [m["author"] for m in messages] == ["Talbot Mensah"]
+
+
+def test_a_command_given_to_another_bot_is_not_group_content(tmp_path):
+    """"@~Jymns Bot Okay provide the session video links" is an instruction
+    to another team's bot, no more a thing the group said than "@ask what is
+    the deadline" is. Six bots were tested in this group in one week, and
+    indexing these turns one person's command to a machine into a source for
+    somebody else's question."""
+    export = (
+        "[21/09/2026, 13:02:21] N: @~Jymns Bot I need all the links\n"
+        "[21/09/2026, 13:06:57] N: @Nexus Bot provide the session videos\n"
+        "[21/09/2026, 13:07:49] N: @smith who is the admin ?\n"
+        "[21/09/2026, 13:13:27] N: GIF retiré\n"
+        "[21/09/2026, 13:20:00] N: the bot answered quickly\n"
+    )
+
+    messages = parse(tmp_path, export)
+
+    # A question to a person stays, and so does a sentence that merely
+    # mentions a bot.
+    assert [m["content"] for m in messages] == [
+        "@smith who is the admin ?",
+        "the bot answered quickly",
+    ]

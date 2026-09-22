@@ -52,6 +52,9 @@ NOISE = re.compile(
     # non-breaking space, which a literal space never matches.
     r"inclut plus de \d+\s*membres|a modifié|a supprimé ce message|"
     r"image absente|vidéo absente|audio absent|document absent|"
+    # "GIF retiré", "image retirée": what WhatsApp leaves behind when
+    # somebody deletes a message for everyone.
+    r"(GIF|image|vidéo|sticker|autocollant|message|audio) retirée?|"
     r"sticker absent|GIF absent|autocollant absent)",
     re.IGNORECASE,
 )
@@ -72,7 +75,17 @@ INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
 # worker applies the same rule to live messages (adapters/whatsapp/index.js);
 # this is the same rule for an export, which is written after the fact and so
 # contains both sides of every exchange.
-ADDRESSED_TO_BOT = re.compile(r"^\s*@ask\b", re.IGNORECASE)
+ADDRESSED_TO_BOT = re.compile(
+    # Ours, and anybody else's.
+    #
+    # "@~Jymns Bot Okay provide the session video links" is a command given
+    # to another team's bot. It is not something the group said, any more
+    # than "@ask what is the deadline" is, and indexing it turns one
+    # person's instruction to a machine into a source for somebody else's
+    # question. Six bots were tested in this group in one week.
+    r"^\s*@(ask\b|\S{1,30}\s+bot\b)",
+    re.IGNORECASE,
+)
 
 # Any bot's messages, ours included, by the name the export shows.
 #
