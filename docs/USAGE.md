@@ -14,6 +14,7 @@ answers**, and nobody else sees any of it.
 | The group's schedule | `@ask timeline` | `timeline` | yes |
 | A summary of the group | `@ask résumé` | see below | yes |
 | The whole group explained | `@ask résumé complet` | `résumé complet` | yes |
+| A shared document, as a PDF, in your language | `@ask envoie le brief en français` | same | no |
 | What was decided on the last call | `@ask recap de l'appel` | `recap de l'appel` | yes |
 | Your own catch-up | not applicable | `what did I miss` | no, see below |
 | Say an answer was wrong | react 👍 👎 | react 👍 👎 | the buttons under the answer |
@@ -193,6 +194,28 @@ rather than answering with whatever message happens to mention a call.
 The word "recap" on its own means the daily digest, which is what people
 usually mean. Name the call and you get the call.
 
+### Get a document in your language
+
+```
+envoie moi le brief du hackathon en français
+send me the hackathon guidelines in French
+share the video demo guide pdf
+```
+
+The bot builds a PDF and sends it as a file, not as a link. The programme's
+documents arrived here in English; half this group works in French and has
+said in this group that it cannot follow. A document is translated the
+first time somebody asks for it in a language and kept, so the second
+person waits for nothing.
+
+The translation keeps every date, number, name, email and link exactly as
+they are, and says on the last line that it was machine translated from the
+original shared in the group.
+
+Asking what a document *says* is a different thing and stays a question:
+"what do the guidelines say about teams" is answered from the text, with a
+citation.
+
 ### See the schedule
 
 ```
@@ -245,6 +268,16 @@ to do:
 If you reply in the group before it gets to you, it drops the reminder.
 
 ---
+
+## It reacts rather than replies
+
+Thank it and it reacts 🙏 instead of writing back. In a group that has asked
+for fewer bot messages, an answer to a thank-you is one more message nobody
+needed.
+
+Ask it something in the group and it reacts 👀 the moment it starts working.
+A whole-group summary takes the better part of a minute, and that reaction
+is how you know it heard you.
 
 ## Telling it when it is wrong
 

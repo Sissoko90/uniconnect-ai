@@ -804,6 +804,13 @@ async function handleGroup(sock, msg, text, sender) {
 
   console.log('@ask in the group, answering');
 
+  // Heard you. A reaction costs no message in a group that has asked for
+  // fewer of them, and it arrives before the answer, which can take the
+  // better part of a minute on a whole-group summary.
+  await react(sock, msg, '👀');
+
+  if (await maybeThank(sock, msg, text.slice(4))) return;
+
   const question = withQuoted(text.slice(4).trim(), quotedIn(msg));
   if (!question) {
     await reply(sock, msg, 'Ask me something after @ask - for example: @ask what is the deadline?');
@@ -830,11 +837,15 @@ async function handleGroup(sock, msg, text, sender) {
   }
 
   await reply(sock, msg, withSources(result));
+  if (result.meta?.send_document) {
+    await sendDocument(sock, msg, result.meta.send_document);
+  }
 }
 
 async function handlePrivate(sock, msg, text, sender) {
   // In private the bot always answers. This half of the product costs the
   // group nothing, which is exactly why it is allowed to be talkative.
+  if (await maybeThank(sock, msg, text)) return;
   if (matches(text, CATCHUP_PHRASES) && !matches(text, OVERVIEW_MARKERS)) {
     const result = await answerOrExplain(sock, msg, text, () =>
       whileThinking(sock, msg.key.remoteJid, () =>
@@ -872,6 +883,85 @@ async function handlePrivate(sock, msg, text, sender) {
   );
   if (!result) return;
   await reply(sock, msg, withSources(result));
+  if (result.meta?.send_document) {
+    await sendDocument(sock, msg, result.meta.send_document);
+  }
+}
+
+// Somebody thanking the bot, in either language.
+//
+// Worth catching because the right reply to "merci" is not a message. In a
+// group that has asked for less bot noise, an answer to a thank-you is one
+// more message nobody needed; a reaction says the same thing and adds
+// nothing to the thread.
+const THANKS = [
+  'merci', 'thanks', 'thank you', 'thx', 'shukran', 'asante', 'nice one',
+  'well done', 'good bot', 'bravo', 'super', 'parfait', 'perfect',
+  'genial', 'génial', 'excellent', 'top', 'nickel', 'great',
+];
+
+/** React to a message, the way a person long-presses and picks an emoji.
+ *
+ * Never fails loudly: a reaction is a courtesy, and a courtesy that takes
+ * the bot down is not one.
+ */
+async function react(sock, msg, emoji) {
+  try {
+    await sock.sendMessage(msg.key.remoteJid, {
+      react: { text: emoji, key: msg.key },
+    });
+  } catch (error) {
+    console.error('reaction failed:', error.message);
+  }
+}
+
+/** Thanks, answered with a reaction instead of a message.
+ *
+ * Returns true when it handled the message, so the caller says nothing
+ * more. Only for a message that is ONLY thanks: "thanks, and what is the
+ * deadline" is a question with a polite opening and deserves an answer.
+ */
+async function maybeThank(sock, msg, text) {
+  const words = normalise(text).replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 4) return false;
+  if (!THANKS.some((t) => normalise(text).includes(t))) return false;
+
+  await react(sock, msg, '🙏');
+  console.log('thanked, reacted rather than replied');
+  return true;
+}
+
+/** Send a document as a file, after the answer that announced it.
+ *
+ * The file itself rather than a link: somebody who asks for the hackathon
+ * guidelines in French wants the document, and on a phone with a poor
+ * connection a link is one more thing to tap and wait for.
+ *
+ * A failure here is said out loud. The person has just been told the file
+ * is coming, and silence after that is worse than never having offered.
+ */
+async function sendDocument(sock, msg, wanted) {
+  try {
+    const bytes = await api.documentPdf(wanted.source_id, wanted.lang);
+    const fileName = `${wanted.title.replace(/[^\w -]+/g, '')}-${wanted.lang}.pdf`;
+
+    await underTheCeiling();
+    await sock.sendMessage(
+      msg.key.remoteJid,
+      { document: bytes, mimetype: 'application/pdf', fileName },
+      { quoted: msg }
+    );
+    console.log(`sent ${fileName} (${Math.round(bytes.length / 1024)} kB)`);
+  } catch (error) {
+    console.error('document failed:', error.message);
+    await reply(
+      sock,
+      msg,
+      wanted.lang === 'fr'
+        ? "Je n'ai pas réussi à préparer le document. Réessaie dans un moment."
+        : 'I could not prepare that document. Try again in a moment.'
+    );
+  }
 }
 
 /** Send, after a pause, quoting what it answers. */

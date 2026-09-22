@@ -286,3 +286,34 @@ def test_asking_about_one_subject_is_still_a_question():
     answered with the messages about Wadhwani, and cites them."""
     assert not intent.wants_a_summary("what do you know about Wadhwani")
     assert not intent.wants_a_summary("tu sais quelque chose sur le visa ?")
+
+
+# --------------------------------------------------------------------------
+# Asking for the document itself
+# --------------------------------------------------------------------------
+
+
+def test_asking_for_the_file_is_not_asking_about_its_contents():
+    """"Send me the hackathon guidelines in French" wants the document. Half
+    this group works in French and the guidelines reached it as an English
+    PDF, which is a complaint its own history records."""
+    for question in ["envoie moi le brief du hackathon en français",
+                     "send me the hackathon guidelines in French",
+                     "can you share the guidelines pdf",
+                     "donne moi le document en pdf"]:
+        assert intent.wants_a_document(question), question
+
+
+def test_a_question_about_a_document_stays_a_question():
+    """Answered from the text, with a citation, not by sending a file."""
+    for question in ["what do the guidelines say about teams ?",
+                     "quelle est la date limite ?",
+                     "how many people per team does the brief allow"]:
+        assert not intent.wants_a_document(question), question
+
+
+def test_the_language_asked_for_is_read_from_the_request():
+    assert intent.document_language("le brief en français") == "fr"
+    assert intent.document_language("the guidelines in English") == "en"
+    # Not stated: the caller falls back to the language of the question.
+    assert intent.document_language("send me the guidelines pdf") is None

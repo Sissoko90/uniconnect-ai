@@ -117,6 +117,30 @@ export const surveyRating = (messageId, helpful) =>
   call('POST', '/survey/rating', { body: { message_id: messageId, helpful } });
 
 /** What the group is, from all of its history. Slow: it reads everything. */
+/** One of the group's documents as a PDF, translated if asked.
+ *
+ * Bytes, not JSON: this is the one call whose answer is a file. Slow on the
+ * first request for a language, because the document is translated then;
+ * instant afterwards.
+ */
+export async function documentPdf(sourceId, lang) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), VERY_SLOW_MS);
+  try {
+    const response = await fetch(
+      `${BASE}/document/${encodeURIComponent(sourceId)}.pdf?lang=${lang}`,
+      { signal: controller.signal, headers: { 'x-uniconnect-token': TOKEN } }
+    );
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`document pdf → ${response.status} ${detail.slice(0, 200)}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const overview = (groupId, lang) =>
   call('GET', `/overview/${encodeURIComponent(groupId)}${lang ? `?lang=${lang}` : ''}`, {
     timeout: VERY_SLOW_MS,

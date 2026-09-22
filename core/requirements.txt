@@ -9,3 +9,6 @@ pydantic==2.13.5
 anthropic==1.6.0
 voyageai==0.5.0
 requests==2.34.2
+# Builds the PDF of a document translated for the group. Pure Python, no
+# system libraries, no headless browser.
+fpdf2==2.8.8

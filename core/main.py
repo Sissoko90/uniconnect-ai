@@ -15,6 +15,8 @@ features land behind them.
   GET  /recap/... decisions and action items from a transcribed call
   GET  /digest/.. five lines on the last 24 hours
   GET  /overview/ what the group is, from all of its history
+  GET  /documents/ the documents this group has shared
+  GET  /document/<id>.pdf  one of them, as a PDF, translated on request
   GET  /timeline/ the group's schedule, drawn from what it actually said
   GET  /metrics   usage, as JSON
   GET  /metrics/page  the same, as a page for the judges
@@ -25,6 +27,7 @@ features land behind them.
 import asyncio
 import os
 import pathlib
+import re
 import time
 from contextlib import asynccontextmanager
 
@@ -32,15 +35,17 @@ import alerts
 import answer as answer_engine
 import auth
 import catchup as catchup_engine
+import documents as documents_engine
 import ingest
 import intent
 import limits
 import metrics as metrics_engine
+import pdf as pdf_engine
 import recap
 import satisfaction
 import timeline as timeline_engine
 import voice
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
@@ -85,6 +90,7 @@ EXPECTED_TABLES = (
     "satisfaction",
     "model_usage",
     "overview_cache",
+    "document_renderings",
 )
 
 
@@ -177,6 +183,34 @@ NO_CALL = {
 }
 
 
+# Said while the file is being built. Translating a document takes a model
+# call and the best part of a minute, and a silent wait reads as a bot that
+# ignored you.
+DOCUMENT_COMING = {
+    "fr": "Je t'envoie « {title} » en français, un instant.",
+    "en": "Sending you \"{title}\", one moment.",
+}
+
+
+def _document_asked_for(question: str, found: list[dict]) -> dict:
+    """Which document they meant, from the words they used.
+
+    Scored on how much of a title the question mentions rather than matched
+    exactly: people write "the guidelines", not "UniPods Hackathon
+    Guidlines", and the organiser's own filename has a typo in it.
+    """
+    lowered = question.lower()
+
+    def overlap(document: dict) -> int:
+        words = [w for w in re.findall(r"\w+", document["title"].lower()) if len(w) > 3]
+        return sum(1 for w in words if w in lowered)
+
+    best = max(found, key=overlap)
+    # Nothing matched, so the most recent one, which is what "the document"
+    # means to somebody who has just seen it go past.
+    return best if overlap(best) else found[0]
+
+
 class Source(BaseModel):
     author: str
     said_at: str
@@ -241,6 +275,37 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
         )
 
     personal = req.private and trusted
+
+    # A request for a document itself, rather than for something it says.
+    #
+    # "Send me the hackathon guidelines in French" wants the file. The API
+    # cannot send anything, so it names the document and the language and
+    # lets the worker deliver it: the rule about what the bot sends, and
+    # where, lives in one place and it is not here.
+    if intent.wants_a_document(question):
+        try:
+            found = documents_engine.listing(pool, req.group_id)
+        except Exception as exc:  # noqa: BLE001
+            print(f"document listing failed: {exc}", flush=True)
+            found = []
+
+        if found:
+            lang = intent.document_language(question) or answer_engine.detect_lang(
+                question
+            )
+            wanted = _document_asked_for(question, found)
+            return AskResponse(
+                answer=DOCUMENT_COMING[lang].format(title=wanted["title"]),
+                sources=[],
+                meta={
+                    "duplicate": False,
+                    "send_document": {
+                        "source_id": str(wanted["id"]),
+                        "lang": lang,
+                        "title": wanted["title"],
+                    },
+                },
+            )
 
     # The schedule, for anybody on any client. It is built from dates the
     # group itself wrote and it names nobody privately, so it is exactly as
@@ -778,6 +843,62 @@ def daily_digest(group_id: str, day: str | None = None, lang: str | None = None)
     """
     limits.assert_budget(pool)
     return _needs_a_model(lambda: recap.daily_digest(pool, group_id, day, lang))
+
+
+@app.get("/documents/{group_id}", dependencies=[Depends(auth.require_worker)])
+def group_documents(group_id: str) -> dict:
+    """Every document this group has, so a client can offer them by name."""
+    return {"documents": documents_engine.listing(pool, group_id)}
+
+
+@app.get("/document/{source_id}.pdf", dependencies=[Depends(auth.require_worker)])
+def document_pdf(source_id: str, lang: str = "en"):
+    """One document as a PDF, translated if the reader wants another language.
+
+    A file rather than a link. Asked for the hackathon guidelines in French,
+    people want the document: a link is one more thing to tap on a phone
+    with a bad connection, and half of them are reading on one.
+
+    Built here rather than in the worker because this is where the text and
+    the model already are, and because the worker should hold one thing at
+    a time: a WhatsApp connection.
+    """
+    if not pdf_engine.available():
+        raise HTTPException(
+            status_code=503,
+            detail="No Unicode font on the API image, so French would be unreadable.",
+        )
+
+    rendered = _needs_a_model(
+        lambda: documents_engine.render(pool, source_id, lang)
+    )
+    if "error" in rendered:
+        raise HTTPException(status_code=404, detail=rendered["error"])
+
+    note = (
+        "Traduit automatiquement par UniConnect-BOT depuis le document "
+        "original partagé dans le groupe."
+        if rendered.get("translated") and rendered["lang"] == "fr"
+        else "Machine translated by UniConnect-BOT from the document shared "
+        "in the group."
+        if rendered.get("translated")
+        else ""
+    )
+
+    return Response(
+        content=pdf_engine.build(rendered["title"], rendered["text"], note),
+        media_type="application/pdf",
+        headers={
+            "content-disposition":
+                f'attachment; filename="{_filename(rendered)}"'
+        },
+    )
+
+
+def _filename(rendered: dict) -> str:
+    """A name somebody can find again in their downloads."""
+    safe = re.sub(r"[^A-Za-z0-9]+", "-", rendered["title"]).strip("-")
+    return f"{safe or 'document'}-{rendered['lang']}.pdf"
 
 
 @app.get("/overview/{group_id}", dependencies=[Depends(auth.require_worker)])

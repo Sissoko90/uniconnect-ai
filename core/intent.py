@@ -201,6 +201,48 @@ def wants_a_call_recap(question: str) -> bool:
     )
 
 
+# Asking for a document itself, rather than for something it says.
+#
+# "Send me the hackathon guidelines in French" is not a question about the
+# rules, it is a request for the file. Half this group works in French and
+# the guidelines reached it as an English PDF, which is the complaint its
+# own history records.
+DOCUMENT_WORDS = (
+    "document", "documents", "pdf", "brief", "guidelines", "guideline",
+    "règlement", "reglement", "fichier", "le guide", "the guide",
+)
+
+WANTS_THE_FILE = (
+    "send", "give", "share", "download", "envoie", "envoyer", "donne",
+    "partage", "télécharge", "telecharge", "version", "copy", "copie",
+    "en pdf", "in pdf", "en français", "en francais", "in french",
+    "in english", "en anglais", "traduit", "translated", "traduis",
+)
+
+
+def wants_a_document(question: str) -> bool:
+    """A request for the file, not for a fact inside it.
+
+    Both halves are required. "What do the guidelines say about teams" is a
+    question, answered from the text with a citation; "send me the
+    guidelines in French" is a request for the document.
+    """
+    lowered = question.lower()
+    return any(w in lowered for w in DOCUMENT_WORDS) and any(
+        w in lowered for w in WANTS_THE_FILE
+    )
+
+
+def document_language(question: str) -> str | None:
+    """Which language they asked for, or None when they did not say."""
+    lowered = question.lower()
+    if any(w in lowered for w in ("français", "francais", "french", "fr)")):
+        return "fr"
+    if any(w in lowered for w in ("anglais", "english", "en)")):
+        return "en"
+    return None
+
+
 def wants_the_timeline(question: str) -> bool:
     """A request for the group's dates rather than a question about one.
 
