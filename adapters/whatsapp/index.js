@@ -172,7 +172,18 @@ const TIMELINE_PHRASES = [
 // topic", not "once per person": the second asker gets the answer, the fifth
 // gets silence, because by then it is on the screen just above them.
 const answeredAloud = new Map();
-const TOPIC_TTL_MS = 6 * 60 * 60 * 1000;
+
+// How long the bot stays quiet on a topic it has already answered aloud.
+//
+// Six hours is right in normal use: the answer is a few messages up and
+// repeating it is the noise this bot exists to remove.
+//
+// It is wrong on a testing day. Three hundred people trying the bot all ask
+// the same handful of questions, so from the third person onwards the bot
+// says nothing, and "I asked it and it ignored me" is exactly what this
+// group said about another bot. Set TOPIC_QUIET_MINUTES=10 for a day like
+// that, and put it back afterwards.
+const TOPIC_TTL_MS = Number(process.env.TOPIC_QUIET_MINUTES || 360) * 60_000;
 
 // Groups we have already said we are ignoring. One line each, not one per
 // message: the bot may legitimately sit in other groups and we are not going

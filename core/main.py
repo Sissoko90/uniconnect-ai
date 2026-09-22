@@ -124,7 +124,15 @@ async def lifespan(app: FastAPI):
     # Instead the API always comes up, and /health reports 503 for as long as
     # the database is unreachable. It then recovers on its own, with no
     # restart, the moment the database answers again.
-    pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=10, open=False)
+    # Sized for a day when the whole group tries the bot at once. Every
+    # endpoint here is a sync def, so FastAPI runs it in a threadpool of
+    # about forty: ten connections was the queue in front of it.
+    pool = ConnectionPool(
+        DATABASE_URL,
+        min_size=2,
+        max_size=int(os.environ.get("DB_POOL_MAX", "20")),
+        open=False,
+    )
     pool.open()
 
     # Say at once if the database is missing something this code needs.
