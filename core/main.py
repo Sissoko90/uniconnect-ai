@@ -25,6 +25,7 @@ features land behind them.
 """
 
 import asyncio
+import base64
 import os
 import pathlib
 import re
@@ -47,6 +48,7 @@ import poll
 import recap
 import satisfaction
 import timeline as timeline_engine
+import vision
 import voice
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse, HTMLResponse
@@ -239,6 +241,16 @@ class AskRequest(BaseModel):
     # duplicate detection that speaks in front of the group.
     private: bool = False
 
+    # An image the question is about, base64 encoded, when somebody replied
+    # to a photo with @ask or captioned one with it.
+    #
+    # Only ever the image they pointed at. Nothing here indexes pictures:
+    # describing every photograph in a busy group would pay for every meme
+    # and every screenshot on the chance that one mattered later, and this
+    # system's unit of work is text, which a photograph does not become.
+    image_base64: str | None = None
+    image_mime: str | None = None
+
 
 # How far back a digest reaches when the day itself has nothing to report.
 #
@@ -296,6 +308,34 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
             answer=intent.HELLO_BACK[intent.greeting_language(question)],
             sources=[],
             meta={"duplicate": False, "greeting": True},
+        )
+
+    # A question about an image. Answered from the image, before retrieval,
+    # because the answer is in the picture and not in the history: searching
+    # the group for messages about a poster somebody has just photographed
+    # finds the conversation around it at best.
+    #
+    # Behind the worker token. The image arrives as base64 in the request
+    # body, and letting the open page post one would be letting a stranger
+    # spend the group's budget on a picture of their own.
+    if req.image_base64 and trusted:
+        lang = answer_engine.detect_lang(question)
+        try:
+            seen = vision.look(
+                pool, question, base64.b64decode(req.image_base64),
+                req.image_mime or "", lang,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # The same rule as everywhere else: a model failure degrades the
+            # answer rather than becoming a 500 in front of the group.
+            print(f"looking at an image failed: {exc}", flush=True)
+            seen = {"error": "off"}
+
+        return AskResponse(
+            answer=seen.get("answer") or vision.refusal(seen["error"], lang),
+            sources=[],
+            meta={"duplicate": False, "image": True,
+                  "answered": "answer" in seen},
         )
 
     # Somebody asking what the bot can do. The one subject the group's

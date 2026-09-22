@@ -250,11 +250,22 @@ const answeredAloud = new Map();
 // group said about another bot. Nobody who has just been ignored concludes
 // that the bot was being considerate.
 //
-// TOPIC_QUIET_MINUTES=0 answers everybody, every time. It costs almost
-// nothing: a repeated question is recognised as one already asked and comes
-// back from the stored answer without calling the model at all. Use it for
-// a day when the group is judging, and put it back to 360 afterwards.
-const TOPIC_TTL_MS = Number(process.env.TOPIC_QUIET_MINUTES ?? 360) * 60_000;
+// So the default is 0: answer everybody, every time.
+//
+// It was 360, six hours, and that is how "@ask What session are we having
+// tomorrow and what's the time?" got no reply at all. The question was
+// close enough to one already asked that day to count as a repeat, and the
+// person who asked it saw a bot that ignored them. Nobody who has just been
+// ignored concludes that the bot was being considerate.
+//
+// Answering costs almost nothing here: a repeated question is recognised as
+// one already asked and comes back from the stored answer without calling
+// the model. The saving was never money, only messages, and silence in
+// front of somebody who asked is the more expensive of the two.
+//
+// Set TOPIC_QUIET_MINUTES to 360 after the hackathon, when the group is
+// living with the bot rather than testing it.
+const TOPIC_TTL_MS = Number(process.env.TOPIC_QUIET_MINUTES ?? 0) * 60_000;
 
 // Groups we have already said we are ignoring. One line each, not one per
 // message: the bot may legitimately sit in other groups and we are not going
@@ -379,6 +390,64 @@ function withQuoted(question, quoted) {
   const trimmed =
     quoted.text.length > 1500 ? `${quoted.text.slice(0, 1500)}...` : quoted.text;
   return `${question}\n\n[replying to this message]\n${trimmed}`;
+}
+
+// Anthropic refuses an image above 5 MB, and base64 adds a third on top of
+// whatever we read. WhatsApp recompresses photographs well under a
+// megabyte, so this turns away a forwarded original, not a phone camera.
+const IMAGE_MAX_BYTES = Number(process.env.VISION_MAX_BYTES || 4_000_000);
+
+/** The image this question is about, downloaded, or null.
+ *
+ * Two shapes, because both are natural and people use both: replying to a
+ * photo with "@ask what time does this say", and posting a photo captioned
+ * "@ask what time does this say".
+ *
+ * A quoted image has to be rebuilt into something downloadable. WhatsApp
+ * sends the reply carrying the quoted message's content and the key of the
+ * original separately, and downloadMediaMessage wants them together.
+ *
+ * Nothing here runs unless somebody asked. No image is fetched, described
+ * or indexed on its own: the group posts screenshots and memes all day and
+ * paying to look at each one, on the chance that one matters later, is the
+ * opposite of what this bot is for.
+ */
+async function imageFor(sock, msg) {
+  const own = msg.message?.imageMessage;
+  const context = msg.message?.extendedTextMessage?.contextInfo;
+  const quoted = context?.quotedMessage?.imageMessage;
+  if (!own && !quoted) return null;
+
+  const carrier = own
+    ? msg
+    : {
+        key: {
+          remoteJid: msg.key.remoteJid,
+          id: context.stanzaId,
+          participant: context.participant,
+          fromMe: false,
+        },
+        message: context.quotedMessage,
+      };
+
+  try {
+    const bytes = await downloadMediaMessage(carrier, 'buffer', {}, {
+      reuploadRequest: sock.updateMediaMessage,
+    });
+    if (bytes.length > IMAGE_MAX_BYTES) {
+      console.log(`image too large to send on: ${bytes.length} bytes`);
+      return null;
+    }
+    return {
+      base64: bytes.toString('base64'),
+      mime: (own || quoted).mimetype || 'image/jpeg',
+    };
+  } catch (error) {
+    // The answer still goes out, from the text alone. Losing the picture is
+    // a worse answer; failing here would be no answer at all.
+    console.error('could not download an image:', error.message);
+    return null;
+  }
 }
 
 function quotedIn(msg) {
@@ -857,9 +926,13 @@ async function handleGroup(sock, msg, text, sender) {
     return;
   }
 
+  // Only when they pointed at one. Fetched before the answer because the
+  // API has to receive it with the question.
+  const image = await imageFor(sock, msg);
+
   const result = await answerOrExplain(sock, msg, question, () =>
     whileThinking(sock, msg.key.remoteJid, () =>
-      api.ask(question, sender, GROUP_ID, false)
+      api.ask(question, sender, GROUP_ID, false, image)
     )
   );
   if (!result) return;
@@ -916,9 +989,10 @@ async function handlePrivate(sock, msg, text, sender) {
   }
 
   const asked = withQuoted(text, quotedIn(msg));
+  const image = await imageFor(sock, msg);
   const result = await answerOrExplain(sock, msg, asked, () =>
     whileThinking(sock, msg.key.remoteJid, () =>
-      api.ask(asked, sender, GROUP_ID, true)
+      api.ask(asked, sender, GROUP_ID, true, image)
     )
   );
   if (!result) return;
@@ -1098,6 +1172,11 @@ async function reply(sock, msg, text) {
   await underTheCeiling();
   await humanPause();
   await sock.sendMessage(msg.key.remoteJid, { text }, { quoted: msg });
+  // Logged on the way out, so "the bot ignored me" can be told apart from
+  // "the bot answered and WhatsApp dropped it" without guessing. Every
+  // other exit from the group handler already says why it took it; this was
+  // the one that said nothing when it worked.
+  console.log(`replied (${text.length} chars)`);
 }
 
 // --------------------------------------------------------------------------

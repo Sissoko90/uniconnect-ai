@@ -66,13 +66,31 @@ def test_voice_notes_are_claimed_only_when_transcription_is_configured(monkeypat
     assert "voice notes" not in capabilities.describe("en")
 
 
-def test_it_says_plainly_that_it_cannot_see_pictures(monkeypatch):
-    """The honest half of the answer. Captions yes, the picture no, and
-    saying so is what keeps the rest of the list believable."""
-    monkeypatch.setattr(capabilities.voice, "available", lambda: True)
+def test_looking_at_a_photo_says_how_to_ask_for_it(monkeypatch):
+    """The bot never looks at a picture on its own, so the list has to say
+    what the person must do. "I can read images" would be true and would
+    leave everybody waiting for something that never happens."""
+    monkeypatch.setattr(capabilities.answer_engine, "generation_available", lambda: True)
 
-    assert "cannot see pictures" in capabilities.describe("en")
-    assert "ne vois pas les photos" in capabilities.describe("fr")
+    assert "@ask" in capabilities.describe("en")
+    assert "point me at it" in capabilities.describe("en")
+    assert "si tu me la montres" in capabilities.describe("fr")
+
+
+def test_nothing_is_claimed_without_the_key_behind_it(monkeypatch):
+    """A deployment with no generation key must not tell the group it reads
+    photos. That is the failure this module exists to fix, pointing the
+    other way."""
+    monkeypatch.setattr(capabilities.answer_engine, "generation_available", lambda: False)
+    monkeypatch.setattr(capabilities.voice, "available", lambda: False)
+
+    said = capabilities.describe("en")
+
+    assert "photo" not in said
+    assert "voice notes" not in said
+    # And still answers something useful, because reading the group's
+    # messages needs no key of its own.
+    assert "Read every message" in said
 
 
 def test_an_unknown_language_still_gets_an_answer():

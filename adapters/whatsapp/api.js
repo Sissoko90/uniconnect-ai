@@ -62,10 +62,22 @@ async function call(method, path, { body, timeout = FAST_MS } = {}) {
 /** Is the API up, and does it have what it needs? */
 export const health = () => call('GET', '/health');
 
-/** Answer a question. `privateChat` keeps it out of what the group is told. */
-export const ask = (question, user, groupId, privateChat) =>
+/** Answer a question. `privateChat` keeps it out of what the group is told.
+ *
+ * `image` is {base64, mime} when the question was asked about a photo, and
+ * null otherwise, which is nearly always. Only an image somebody pointed at
+ * is ever sent: nothing here looks at pictures on its own.
+ */
+export const ask = (question, user, groupId, privateChat, image = null) =>
   call('POST', '/ask', {
-    body: { question, user, group_id: groupId, private: privateChat },
+    body: {
+      question,
+      user,
+      group_id: groupId,
+      private: privateChat,
+      image_base64: image?.base64 || null,
+      image_mime: image?.mime || null,
+    },
     timeout: VERY_SLOW_MS,
   });
 

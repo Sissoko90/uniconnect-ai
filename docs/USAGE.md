@@ -19,8 +19,10 @@ answers**, and nobody else sees any of it.
 | Your own catch-up | not applicable | `what did I miss` | no, see below |
 | Say an answer was wrong | react 👍 👎 | react 👍 👎 | the buttons under the answer |
 | Voice notes, transcribed and searchable | yes | yes | no |
+| Ask about a photo | reply to it with `@ask …` | same | no |
 | Told when the group is waiting on you | arrives privately | arrives privately | no |
-| The morning digest | posted at 07:00 UTC | no | ask for a summary |
+| The morning digest | posted at 05:00 Bamako | no | ask for a summary |
+| The evening poll | posted at 23:00 Bamako | no | no |
 | Asked what you think of the bot | no | once, after 5 questions | no |
 
 Two of those say no, and both for a reason rather than an oversight.
@@ -82,8 +84,21 @@ the answer, with their name on it.
 
 ### If somebody already asked
 
-The bot answers the second person, then stays quiet on that topic for six
-hours. The answer is already on the screen just above.
+It answers anyway. Everybody who asks gets an answer, every time.
+
+It used to go quiet on a topic for six hours after answering it, on the
+grounds that the answer was already on the screen just above. That is true
+and it reads as being ignored: "@ask What session are we having tomorrow and
+what's the time?" got no reply at all, because a similar question had been
+asked earlier that day. Nobody who has just been ignored concludes that the
+bot was being considerate.
+
+Answering costs almost nothing. A repeated question is recognised as one
+already asked and comes back from the stored answer without calling the
+model, so the saving was never money, only messages.
+
+`TOPIC_QUIET_MINUTES` brings the quiet window back, in minutes, for a group
+that is living with the bot rather than testing it.
 
 ### Every morning
 
@@ -121,6 +136,26 @@ Further east the group wakes up to it a little later.
 | Uganda, Kenya | 08:00 |
 
 Change it with `DIGEST_HOUR_UTC`, and its length with `MORNING_DIGEST_LINES`.
+
+### Ask about a photo
+
+```
+(reply to an image)  @ask what time does this say?
+(caption an image)   @ask is this the right room?
+```
+
+Reply to a photo with `@ask` and your question, or post a photo with `@ask`
+in its caption. The bot reads what is in the picture: a date on a poster, a
+time on a screenshot, a room number, an amount.
+
+Only an image somebody pointed at is ever looked at. Nothing in the group is
+described or indexed on its own, so the bot costs nothing for the memes and
+the screenshots, and about a cent for the one picture somebody actually
+asked about.
+
+It is told never to guess at what the image does not show. A blurred or
+cropped date comes back as "I cannot make that part out", because nobody
+re-checks a picture they have already seen.
 
 ### Reactions, without being asked
 
