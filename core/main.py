@@ -36,6 +36,7 @@ import answer as answer_engine
 import auth
 import catchup as catchup_engine
 import documents as documents_engine
+import identity
 import ingest
 import intent
 import limits
@@ -294,6 +295,22 @@ def ask(req: AskRequest, trusted: bool = Depends(auth.is_worker)) -> AskResponse
             answer=intent.HELLO_BACK[intent.greeting_language(question)],
             sources=[],
             meta={"duplicate": False, "greeting": True},
+        )
+
+    # Somebody asking who they are. Answered from who is asking, never from
+    # the history: searching it for messages about names told a member they
+    # were called Shinzii, and their reply began "My name isn't Shinzii".
+    #
+    # Checked early, before anything that costs money, because the answer is
+    # one row of one table.
+    if intent.asks_their_own_name(question):
+        return AskResponse(
+            answer=identity.answer(
+                pool, req.group_id, req.user,
+                answer_engine.detect_lang(question), trusted,
+            ),
+            sources=[],
+            meta={"duplicate": False, "identity": True},
         )
 
     personal = req.private and trusted

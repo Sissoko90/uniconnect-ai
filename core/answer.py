@@ -781,6 +781,22 @@ def _as_sources(hits: list[dict]) -> list[dict]:
     ]
 
 
+def cited_hits(hits: list[dict], cited: list[int]) -> list[dict]:
+    """The messages the answer actually cited, and none when it cited none.
+
+    The empty case is the whole point. This used to fall back to the best
+    search result on the theory that an answer without brackets had simply
+    forgotten them; it had not. An answer with no citations is nearly
+    always an answer that found nothing, and attaching the nearest message
+    to it presents that message as the answer.
+
+    Asked "What's my name?", the bot replied "I could not find your name in
+    the group messages" and printed "Edwin A, 16 Sept" underneath. The
+    member read that as the answer.
+    """
+    return [hits[i - 1] for i in cited if 1 <= i <= len(hits)]
+
+
 def renumber_citations(text: str, cited: list[int]) -> str:
     """Make the numbers in the answer match the sources the reader receives.
 
@@ -970,9 +986,22 @@ def answer_question(
     if generation_available() and not degraded:
         try:
             text, cited, usage = generate(question, hits)
-            # Only return the messages Claude actually used. Citations the
-            # reader cannot match to a sentence are noise.
-            used = [hits[i - 1] for i in cited] if cited else hits[:1]
+            # Only the messages Claude actually cited, and nothing at all
+            # when it cited none.
+            #
+            # This used to fall back to hits[:1], the best search result, on
+            # the theory that an answer without brackets had simply
+            # forgotten them. It had not. An answer with no citations is
+            # almost always an answer that found nothing, and attaching the
+            # nearest message to it presents that message as the answer.
+            #
+            # Asked "What's my name?", the bot replied "I could not find
+            # your name in the group messages" and printed "Edwin A, 16
+            # Sept" underneath. The member read that as the bot's answer and
+            # wrote back "Edwin is this your birthday?". A citation under a
+            # sentence saying nothing was found is worse than no citation,
+            # because it looks like one.
+            used = cited_hits(hits, cited)
             if cited:
                 text = renumber_citations(text, cited)
         except Exception as exc:  # noqa: BLE001

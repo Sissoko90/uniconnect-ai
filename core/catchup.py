@@ -51,6 +51,17 @@ they were away from.
 Write the briefing they would want: what was decided, what they are expected \
 to do, what is still open. Lead with anything addressed to them by name.
 
+PUT THE PROGRAMME FIRST. This group exists for a training programme: \
+classes and what was taught in them, recordings, deadlines, what \
+participants have been asked to do, decisions about the work. The group's \
+talk about itself, and especially its talk about bots, comes last and \
+usually not at all.
+
+Give a link when a line is about something they can open: a recording, a \
+document, a form, a meeting. Copy it exactly, character for character. It \
+is the most useful thing in a briefing and the hardest thing to find by \
+scrolling back.
+
 Use the messages given, between the <group_messages> tags, and nothing else. \
 Never invent a decision, a deadline or a name.
 

@@ -88,6 +88,25 @@ WHOLE_GROUP = frozenset(
 )
 
 
+# Phone keyboards produce a curly apostrophe, U+2019, and every French
+# phrase in this file is written with a straight one. The two do not match.
+#
+# Without this, "qu'est-ce que j'ai raté" typed on an iPhone, which is how
+# most of this group types, matched none of the phrases below and went to
+# retrieval as an ordinary question. Nothing looked broken, which is why it
+# survived this long: the bot answered, it just answered the wrong thing.
+#
+# Applied when matching only, never to the question that is stored or sent
+# to the model. The worker has the same rule for the phrases it matches
+# itself, and the two lists have to agree.
+CURLY = re.compile(r"[‘’ʼ]")
+
+
+def flatten(text: str) -> str:
+    """Lowercased, with apostrophes straightened. For matching, not storing."""
+    return CURLY.sub("'", text.lower())
+
+
 def strip_trigger(question: str) -> str:
     """Remove a leading @ask and any invisible marks, leaving the question."""
     question = INVISIBLE.sub("", question)
@@ -97,7 +116,7 @@ def strip_trigger(question: str) -> str:
 
 def wants_a_summary(question: str) -> bool:
     """A request for the whole picture rather than a question about a thing."""
-    lowered = question.lower()
+    lowered = flatten(question)
     if not any(phrase in lowered for phrase in SUMMARY_PHRASES):
         return False
     # Naming the group, the discussion or everything is still asking for the
@@ -155,7 +174,7 @@ def asks_for_more(question: str) -> bool:
     costs money and still answers correctly; the other way round answers a
     question the person never asked.
     """
-    words = set(re.findall(r"[\w']+", question.lower()))
+    words = set(re.findall(r"[\w']+", flatten(question)))
     for phrase in (*SUMMARY_PHRASES, *COMPLETENESS):
         words -= set(re.findall(r"[\w']+", phrase))
     return bool(words - REQUEST_FILLER - WHOLE_GROUP)
@@ -169,7 +188,7 @@ def wants_an_overview(question: str) -> bool:
     months, and a catch-up shows them nothing at all once their bookmark is
     up to date, which is exactly what happened.
     """
-    lowered = question.lower()
+    lowered = flatten(question)
     if not any(phrase in lowered for phrase in SUMMARY_PHRASES):
         return False
     return any(marker in lowered for marker in COMPLETENESS)
@@ -195,7 +214,7 @@ CALL_WORDS = (
 
 def wants_a_call_recap(question: str) -> bool:
     """Decisions and action items from the last call that was transcribed."""
-    lowered = question.lower()
+    lowered = flatten(question)
     return any(p in lowered for p in RECAP_PHRASES) and any(
         w in lowered for w in CALL_WORDS
     )
@@ -227,7 +246,7 @@ def wants_a_document(question: str) -> bool:
     question, answered from the text with a citation; "send me the
     guidelines in French" is a request for the document.
     """
-    lowered = question.lower()
+    lowered = flatten(question)
     return any(w in lowered for w in DOCUMENT_WORDS) and any(
         w in lowered for w in WANTS_THE_FILE
     )
@@ -235,12 +254,53 @@ def wants_a_document(question: str) -> bool:
 
 def document_language(question: str) -> str | None:
     """Which language they asked for, or None when they did not say."""
-    lowered = question.lower()
+    lowered = flatten(question)
     if any(w in lowered for w in ("français", "francais", "french", "fr)")):
         return "fr"
     if any(w in lowered for w in ("anglais", "english", "en)")):
         return "en"
     return None
+
+
+# Somebody asking who they are, which is not a question about the group.
+#
+# "@ask My name isn't Shinzii 👀 What's my name?" went to retrieval. The bot
+# searched the history for messages on the subject of names, found one, and
+# told a member they were called something they are not. Twice over, because
+# the message says in its first line that the previous answer was wrong.
+#
+# The answer is not in the history. It is in who sent the message, which the
+# worker tells us on every call.
+# Written as whole questions rather than as a list of words that have to
+# co-occur. "My name is Awa, where do I send the video?" contains "my name"
+# and a question mark and is not this: it is somebody introducing themselves
+# before asking something real, and answering it with their own name back
+# would be a non sequitur.
+#
+# That precision is also what lets the real message through. "My name isn't
+# Shinzii 👀 / What's my name?" is a correction followed by a question, and
+# only the second half is matched here.
+OWN_NAME = re.compile(
+    r"what(?:'s| is|s)? my (?:name|first ?name)"
+    r"|what (?:do you call me|am i called)"
+    r"|(?:do |does )?you know my name"
+    r"|comment je m'appelle|je m'appelle comment|comment je me nomme"
+    r"|quel est mon (?:nom|prenom|prénom)"
+    r"|c'est quoi mon (?:nom|prenom|prénom)|mon (?:nom|prenom|prénom) c'est quoi"
+    r"|tu (?:connais|sais) mon nom|connais-tu mon nom"
+)
+
+# "Who am I" only when the question ends there. "Who am I supposed to email
+# about the visa?" is a question about the programme, and answering it with
+# the asker's own name would be the same failure in a new place.
+WHO_AM_I = re.compile(r"\b(?:who am i|qui suis[- ]je|qui je suis)\b\s*[?!.]*\s*$",
+                      re.MULTILINE)
+
+
+def asks_their_own_name(question: str) -> bool:
+    """Who am I, asked of a bot that is told who is asking on every call."""
+    lowered = flatten(question)
+    return bool(OWN_NAME.search(lowered) or WHO_AM_I.search(lowered))
 
 
 def wants_the_timeline(question: str) -> bool:
@@ -250,7 +310,7 @@ def wants_the_timeline(question: str) -> bool:
     people reach for when they want the list of dates, and a digest of the
     last day is not that.
     """
-    lowered = question.lower()
+    lowered = flatten(question)
     if not any(phrase in lowered for phrase in TIMELINE_PHRASES):
         return False
     # "what is on the agenda for the call about visas" is a question about the
@@ -320,7 +380,7 @@ def is_bot_talk(text: str) -> bool:
     lose it for good.
     """
     stripped = strip_trigger(text)
-    words = re.findall(r"[\w']+", stripped.lower())
+    words = re.findall(r"[\w']+", flatten(stripped))
     # No words at all: an emoji, a sticker caption, a lone "@ask". True
     # whatever it was aimed at, since a summary has nothing to report from it.
     if not words:
@@ -348,7 +408,7 @@ def greeting_language(question: str) -> str:
     on in a one-word message: "bonjour" was answered in English, which is a
     small thing that reads as the bot not paying attention.
     """
-    words = set(re.findall(r"[\w']+", question.lower()))
+    words = set(re.findall(r"[\w']+", flatten(question)))
     return "fr" if words & FRENCH_GREETINGS else "en"
 
 
@@ -358,7 +418,7 @@ def is_greeting(question: str) -> bool:
     "hi, what is the deadline" is a question with a polite opening, and
     answering it with a menu would be worse than useless.
     """
-    words = re.findall(r"[\w']+", question.lower())
+    words = re.findall(r"[\w']+", flatten(question))
     if not words or len(words) > 4:
         return False
     # Every word has to be part of a greeting, so "good morning everyone"
