@@ -181,9 +181,14 @@ const answeredAloud = new Map();
 // It is wrong on a testing day. Three hundred people trying the bot all ask
 // the same handful of questions, so from the third person onwards the bot
 // says nothing, and "I asked it and it ignored me" is exactly what this
-// group said about another bot. Set TOPIC_QUIET_MINUTES=10 for a day like
-// that, and put it back afterwards.
-const TOPIC_TTL_MS = Number(process.env.TOPIC_QUIET_MINUTES || 360) * 60_000;
+// group said about another bot. Nobody who has just been ignored concludes
+// that the bot was being considerate.
+//
+// TOPIC_QUIET_MINUTES=0 answers everybody, every time. It costs almost
+// nothing: a repeated question is recognised as one already asked and comes
+// back from the stored answer without calling the model at all. Use it for
+// a day when the group is judging, and put it back to 360 afterwards.
+const TOPIC_TTL_MS = Number(process.env.TOPIC_QUIET_MINUTES ?? 360) * 60_000;
 
 // Groups we have already said we are ignoring. One line each, not one per
 // message: the bot may legitimately sit in other groups and we are not going
@@ -709,7 +714,7 @@ async function handleGroup(sock, msg, text, sender) {
   if (result.meta?.duplicate) {
     const topic = result.meta.original_question || question;
     const last = answeredAloud.get(topic);
-    if (last && Date.now() - last < TOPIC_TTL_MS) {
+    if (TOPIC_TTL_MS > 0 && last && Date.now() - last < TOPIC_TTL_MS) {
       console.log('duplicate already answered aloud, staying quiet');
       return;
     }
@@ -800,7 +805,8 @@ async function checkGroupJid(sock) {
     // means the questions and the history are in two different groups.
     console.log(
       `reading group "${match.subject}" as ${GROUP_ID}, ` +
-        `${POSTS_IN_GROUP ? 'will post the morning digest' : 'silent in the group'}`
+        `${POSTS_IN_GROUP ? 'will post the morning digest' : 'silent in the group'}, ` +
+        `${TOPIC_TTL_MS > 0 ? `quiet ${TOPIC_TTL_MS / 60000}min per topic` : 'answers every repeat'}`
     );
     return;
   }
