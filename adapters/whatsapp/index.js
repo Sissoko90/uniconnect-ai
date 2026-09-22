@@ -116,6 +116,18 @@ const POSTS_IN_GROUP = process.env.DIGEST_ENABLED !== 'false';
 // cost us the paired session three times.
 const INTRODUCE_NOW = process.env.INTRODUCE_NOW === 'true';
 
+// A message written by a person, posted to the group once, on purpose.
+//
+// For the announcement that the team is ready to be tested. It is the team
+// speaking, not the bot, which is why the text is a file somebody wrote and
+// read back rather than anything generated here.
+//
+// Set both, start the worker, watch for "announcement posted", then remove
+// ANNOUNCE_NOW. The marker file makes a restart harmless in the meantime.
+const ANNOUNCE_NOW = process.env.ANNOUNCE_NOW === 'true';
+const ANNOUNCE_FILE = process.env.ANNOUNCE_FILE || 'announcement.txt';
+const ANNOUNCE_STATE = new URL('.announced', import.meta.url).pathname;
+
 // Who the bot says it is. The same name avatar.js writes to the WhatsApp
 // profile, so the message and the contact card agree.
 const BOT_NAME = process.env.BOT_NAME || 'UniConnect-BOT';
@@ -862,6 +874,40 @@ async function checkGroupJid(sock) {
   groups.forEach((g) => console.error(`  ${g.id}  ${g.subject}`));
 }
 
+/**
+ * Post the team's announcement to the group, once.
+ *
+ * Read from a file rather than generated: this is the team saying it is
+ * ready, and a bot that writes its own introduction to a group which has
+ * complained about bot noise is the wrong voice for it.
+ *
+ * Marked done only once it has gone out, like the digest. Marking first
+ * loses the message on any failure, which is the bug that suppressed a
+ * whole morning's digest.
+ */
+async function maybeAnnounce(sock) {
+  if (!ANNOUNCE_NOW || !GROUP_JID) return;
+  if (existsSync(ANNOUNCE_STATE)) return;
+
+  let text;
+  try {
+    text = readFileSync(new URL(ANNOUNCE_FILE, import.meta.url).pathname, 'utf8').trim();
+  } catch (error) {
+    console.error(`ANNOUNCE_NOW is set but ${ANNOUNCE_FILE} could not be read:`, error.message);
+    return;
+  }
+  if (!text) {
+    console.error(`${ANNOUNCE_FILE} is empty, nothing to announce`);
+    return;
+  }
+
+  await underTheCeiling();
+  await humanPause();
+  await sock.sendMessage(GROUP_JID, { text });
+  writeFileSync(ANNOUNCE_STATE, new Date().toISOString());
+  console.log('announcement posted');
+}
+
 function startBackgroundJobs(sock) {
   if (startBackgroundJobs.started) return; // survive a reconnect
   startBackgroundJobs.started = true;
@@ -878,6 +924,7 @@ function startBackgroundJobs(sock) {
   // first tick of the timer, which is ten minutes of wondering whether the
   // flag worked.
   maybePostDigest(sock).catch((e) => console.error(e.message));
+  maybeAnnounce(sock).catch((e) => console.error('announcement failed:', e.message));
 }
 
 const SURVEY = {

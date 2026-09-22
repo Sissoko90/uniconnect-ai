@@ -635,6 +635,31 @@ sudo systemctl restart uniconnect-bot
 That stops the mention alerts and the survey. Answers are unaffected: those
 were asked for.
 
+### Posting the team's announcement
+
+Write it in a file, post it when the organiser gives you your slot:
+
+```bash
+cd /opt/uniconnect-ai/adapters/whatsapp
+nano announcement.txt          # the message, exactly as it should appear
+sudo chown uniconnect announcement.txt
+
+printf 'ANNOUNCE_NOW=true\n' >> .env
+sudo systemctl restart uniconnect-bot
+sleep 10 && journalctl -u uniconnect-bot -n 5 --no-pager   # "announcement posted"
+
+sed -i '/^ANNOUNCE_NOW=/d' .env
+sudo systemctl restart uniconnect-bot
+```
+
+It goes out once: `.announced` is written the moment it is sent, so a
+restart with the flag still set changes nothing.
+
+Posting it by hand from a phone is usually better. The announcement is the
+team saying it is ready, and coming from the bot it becomes a bot
+announcing itself, to a group that has complained about exactly that. The
+switch exists for when nobody is at a phone.
+
 ### A spare number, ready before you need it
 
 Pairing needs a person typing eight characters on a phone, so it cannot

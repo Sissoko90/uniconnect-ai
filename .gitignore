@@ -88,3 +88,8 @@ docker-compose.override.yml
 *~
 .DS_Store
 Thumbs.db
+
+# A one-off message written by the team and posted by hand or by the worker.
+# Not code, and not something to keep in the history.
+adapters/whatsapp/announcement.txt
+adapters/whatsapp/.announced
