@@ -575,6 +575,42 @@ function withSources(result) {
  * characters on a phone and there is no version of that which happens by
  * itself at the moment it is needed.
  */
+/** What a disconnect code means, in the words of what to do about it.
+ *
+ * Baileys exports the numbers; this turns them into the sentence somebody
+ * reads at two in the morning. Only "logged out" needs a human, and only
+ * "connection replaced" means a second process is running, which is the one
+ * failure that gets worse the longer it goes unnoticed.
+ */
+function reasonFor(code) {
+  switch (code) {
+    case DisconnectReason.loggedOut:
+      return 'logged out by WhatsApp, this session is dead and needs re-pairing';
+    case DisconnectReason.connectionReplaced:
+      return 'another process took this session, only one worker may run';
+    case DisconnectReason.forbidden:
+      return 'FORBIDDEN, WhatsApp has restricted this number';
+    case DisconnectReason.restartRequired:
+      return 'restart required, normal right after pairing';
+    // timedOut and connectionLost are both 408, so they cannot be told
+    // apart here and listing them separately would leave a dead branch.
+    case DisconnectReason.timedOut:
+      return 'timed out or lost, usually the network';
+    case DisconnectReason.connectionClosed:
+      return 'connection closed';
+    case DisconnectReason.unavailableService:
+      return 'WhatsApp service unavailable';
+    case DisconnectReason.badSession:
+      return 'bad session file';
+    case DisconnectReason.multideviceMismatch:
+      return 'multidevice mismatch, re-pairing needed';
+    case undefined:
+      return 'no reason given';
+    default:
+      return 'unrecognised reason';
+  }
+}
+
 function switchToTheSpareNumber() {
   if (usingBackup || !existsSync(new URL(AUTH_DIR_BACKUP, import.meta.url).pathname)) {
     stayDownUntilSomebodyRepairs();
@@ -622,9 +658,19 @@ async function connectToWhatsApp(authDir = AUTH_DIR) {
     }
 
     if (connection === 'close') {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log('Connection closed. Reconnecting:', shouldReconnect);
+      const code = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = code !== DisconnectReason.loggedOut;
+      // Named, not just numbered.
+      //
+      // This said "Connection closed. Reconnecting: false" and nothing
+      // else, which is the same sentence whether WhatsApp logged the number
+      // out, a second process stole the session, or the phone simply lost
+      // its network. Those need three different responses, and re-pairing
+      // when it was not needed throws away a working session.
+      console.log(
+        `Connection closed: ${reasonFor(code)} (${code ?? 'no code'}). ` +
+          `Reconnecting: ${shouldReconnect}`
+      );
       if (shouldReconnect) connectToWhatsApp(authDir);
       else switchToTheSpareNumber();
     } else if (connection === 'open') {
