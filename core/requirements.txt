@@ -2,13 +2,13 @@
 # on the VPS. Bumped by dependabot, checked by pip-audit in the Security
 # workflow - the previous fastapi pin dragged in a starlette with eight known
 # vulnerabilities.
-fastapi==0.141.1
-uvicorn[standard]==0.53.0
-psycopg[binary,pool]==3.3.6
-pydantic==2.13.5
-anthropic==1.6.0
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+psycopg[binary,pool]==3.3.8
+pydantic==2.14.3
+anthropic==2.6.0
 voyageai==0.5.0
 requests==2.34.2
 # Builds the PDF of a document translated for the group. Pure Python, no
 # system libraries, no headless browser.
-fpdf2==2.8.8
+fpdf2==2.9.0
